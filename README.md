@@ -1,5 +1,6 @@
 ## *English version is below.*
-
+### Disclaimer
+**This repository is the original repository of the project. The project moved from local git server to GitHub.**
 
 # Game Portal
 
