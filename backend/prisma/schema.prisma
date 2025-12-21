@@ -1,0 +1,127 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              Int       @id @default(autoincrement())
+  discordId       String    @unique
+  username        String
+  isAdmin         Boolean   @default(false)
+  discriminator   String?
+  avatar          String?
+  email           String?
+  customAvatar    Boolean   @default(false)
+  customAvatarUrl String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  sessions        Session[]
+}
+
+model Session {
+  id           Int      @id @default(autoincrement())
+  token        String   @unique
+  refreshToken String   @unique
+  revoked      Boolean  @default(false)
+  user         User     @relation(fields: [userId], references: [id])
+  userId       Int
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+}
+
+model GameModePlaylist {
+  id         Int    @id @default(autoincrement())
+  name       String @unique
+  type       String
+  playlistId Int?
+
+  MusicQuizPlaylist   MusicQuizPlaylist? @relation(fields: [musicQuizPlaylistId], references: [id])
+  musicQuizPlaylistId Int?               @unique
+}
+
+model MusicQuizTrack {
+  id      Int    @id @default(autoincrement())
+  title   String
+  fileUrl String
+
+  MusicQuizPlaylistTrack MusicQuizPlaylistTrack[]
+}
+
+model MusicQuizPlaylist {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  GameModePlaylist GameModePlaylist?
+
+  MusicQuizPlaylistTrack MusicQuizPlaylistTrack[]
+}
+
+model MusicQuizPlaylistTrack {
+  id         Int @id @default(autoincrement())
+  playlistId Int
+  trackId    Int
+
+  playlist MusicQuizPlaylist @relation(fields: [playlistId], references: [id])
+  track    MusicQuizTrack    @relation(fields: [trackId], references: [id])
+
+  @@unique([playlistId, trackId])
+}
+
+model KaraokePlaylist {
+  id   Int    @id @default(autoincrement())
+  name String
+
+  Songs KaraokeSong[]
+}
+
+model KaraokeSong {
+  id    Int    @id @default(autoincrement())
+  title String
+
+  Playlist   KaraokePlaylist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  playlistId Int
+
+  Segments KaraokeSongSegment[]
+}
+
+model KaraokeSongSegment {
+  id      Int         @id @default(autoincrement())
+  index   Int
+  Song    KaraokeSong @relation(fields: [songId], references: [id], onDelete: Cascade)
+  songId  Int
+  fileUrl String
+
+  Rows KaraokeSongLyrics[]
+}
+
+model KaraokeSongLyrics {
+  id          Int                @id @default(autoincrement())
+  index       Int
+  lyrics      String
+  time        Int
+  SongSegment KaraokeSongSegment @relation(fields: [segmentId], references: [id], onDelete: Cascade)
+  segmentId   Int
+}
+
+model SopPlaylist {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  Items SopPlaylistItem[]
+}
+
+model SopPlaylistItem {
+  id         Int         @id @default(autoincrement())
+  title      String
+  fileUrl    String
+  position   Int         @default(0)
+  playlist   SopPlaylist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  playlistId Int
+
+  @@index([playlistId])
+}

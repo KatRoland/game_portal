@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: gameportal
+    ports:
+      - "3307:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      # Removed the space between -p and the password to avoid shell issues
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - game-network
+
+  backend:
+    build: ./backend
+    restart: always
+    ports:
+      - "8083:8083"
+    environment:
+      - DATABASE_URL=mysql://root:rootpassword@mysql:3306/gameportal
+      - JWT_SECRET=supersecretkeyChangeMe
+      - PORT=8083
+      - ALLOWED_ORIGINS=https://gameportal.domain.tld
+      - DISCORD_CLIENT_ID=yourclientid
+      - DISCORD_CLIENT_SECRET=yourclientsecret
+      - DISCORD_REDIRECT_URI=https://gameapi.domain.tld/auth/discord/callback
+      - FRONTEND_REDIRECT=https://gameportal.domain.tld
+      - SESSION_TTL_MS=2592000000
+      - DISCORD_API_URL=http://localhost:3030
+      - DISCORD_GUILD_ID="yourguildid"
+
+    depends_on:
+      mysql:
+        condition: service_healthy 
+    volumes:
+      - ./backend/uploads:/app/uploads
+    networks:
+      - game-network
+
+  frontend:
+    build: ./frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=https://gameapi.domain.tld
+      - NEXT_PUBLIC_WS_BASE_URL=wss://gameapi.domain.tld
+    depends_on:
+      - backend
+    networks:
+      - game-network
+
+  discordbot:
+    build: ./discordbot
+    restart: always
+    environment:
+      - DISCORD_TOKEN=yourdiscordbottoken
+    depends_on:
+      - backend
+    networks:
+      - game-network
+
+volumes:
+  db_data:
+
+networks:
+  game-network:
+    driver: bridge
