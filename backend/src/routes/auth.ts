@@ -9,11 +9,60 @@ import { JWT_SECRET } from "../config";
 
 const router = Router();
 
+// GET /auth/discord/login - Initiates the OAuth flow securely
+router.get("/discord/login", (req, res) => {
+  const clientId = process.env.DISCORD_CLIENT_ID;
+  const redirectUri = process.env.DISCORD_REDIRECT_URI;
+
+  if (!clientId || !redirectUri) {
+    return res.status(500).json({ error: "discord_oauth_not_configured" });
+  }
+
+  const state = crypto.randomBytes(16).toString("hex");
+
+  res.cookie("oauth_state", state, {
+    httpOnly: true,
+    secure: process.env.COOKIE_SECURE === "true",
+    sameSite: "lax",
+    maxAge: 5 * 60 * 1000,
+  });
+
+  const returnTo = typeof req.query.returnTo === "string" ? req.query.returnTo : "";
+  if (returnTo && returnTo.startsWith("/")) {
+    res.cookie("oauth_redirect", returnTo, {
+      httpOnly: true,
+      secure: process.env.COOKIE_SECURE === "true",
+      sameSite: "lax",
+      maxAge: 5 * 60 * 1000,
+    });
+  }
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "identify email",
+    state: state,
+  });
+
+  res.redirect(`https://discord.com/api/oauth2/authorize?${params.toString()}`);
+});
+
 // GET /auth/discord/callback?code=... - Discord OAuth callback, létrehozza a felhasználót és bejelentkezteti
 router.get("/discord/callback", async (req, res) => {
   try {
     const code = String(req.query.code || "");
+    const state = String(req.query.state || "");
+
     if (!code) return res.status(400).json({ error: "missing_code" });
+    if (!state) return res.status(400).json({ error: "missing_state" });
+
+    const storedState = getCookie(req, "oauth_state");
+    if (!storedState || storedState !== state) {
+      return res.status(403).json({ error: "invalid_state" });
+    }
+
+    res.clearCookie("oauth_state");
 
     const clientId = process.env.DISCORD_CLIENT_ID;
     const clientSecret = process.env.DISCORD_CLIENT_SECRET;
@@ -97,12 +146,17 @@ router.get("/discord/callback", async (req, res) => {
     const accessTokenJwt = (jwt as any).sign({ sub: String(dbUser.id) }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXP });
 
     // redirect
+    // redirect
     const FRONTEND_REDIRECT = process.env.FRONTEND_REDIRECT;
     let redirectTo: string | null = null;
-    const state = typeof req.query.state === "string" ? req.query.state : undefined;
+
+    // Retrieve original redirect path from cookie
+    const storedRedirect = getCookie(req, "oauth_redirect");
+    res.clearCookie("oauth_redirect");
+
     if (FRONTEND_REDIRECT) {
-      if (state && state.startsWith("/")) {
-        redirectTo = `${FRONTEND_REDIRECT.replace(/\/$/, "")}${state}`;
+      if (storedRedirect && storedRedirect.startsWith("/")) {
+        redirectTo = `${FRONTEND_REDIRECT.replace(/\/$/, "")}${storedRedirect}`;
       } else {
         redirectTo = FRONTEND_REDIRECT;
       }
@@ -184,5 +238,15 @@ router.post("/logout", async (req, res) => {
     return res.status(500).json({ error: "internal_error" });
   }
 });
+
+// Helper to parse cookies from header
+function getCookie(req: any, name: string): string | undefined {
+  const cookies = req.headers.cookie?.split(";").map((s: string) => s.trim()).reduce((acc: Record<string, string>, cur: string) => {
+    const idx = cur.indexOf("=");
+    if (idx > -1) acc[cur.slice(0, idx)] = decodeURIComponent(cur.slice(idx + 1));
+    return acc;
+  }, {}) ?? {};
+  return cookies[name];
+}
 
 export default router;
