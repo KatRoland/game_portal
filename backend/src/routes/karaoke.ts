@@ -51,8 +51,13 @@ const upload = multer({
 // GET /playlists - visszaadja az összes playlist-et
 router.get("/playlists", jwtMiddleware, async (req, res) => {
 
+  if (!process.env.FRONTEND_REFERER) {
+    res.status(500).json({ error: "Frontend referer not configured" })
+    return
+  }
+
   const referer = req.headers.referer;
-  if (!referer || !referer.includes("game.katroland.hu")) {
+  if (!referer || !referer.includes(process.env.FRONTEND_REFERER)) {
     res.status(403).json({ error: "forbidden" })
     return
   }
@@ -86,12 +91,16 @@ router.get("/tracks/:songid/:segmentid", jwtMiddleware, async (req, res) => {
     const trackId = req.params.songid;
     const segmentId = req.params.segmentid;
 
-    // referer ellenőrzés, ha nem a frontend-tól jön akkor 403
-    // const referer = req.headers.referer;
-    // if(!referer || !referer.includes("gameportal.domain.tld")) {
-    //   res.status(403).json({error: "forbidden"})
-    //   return
-    // }
+    if (!process.env.FRONTEND_REFERER) {
+      res.status(500).json({ error: "Frontend referer not configured" })
+      return
+    }
+
+    const referer = req.headers.referer;
+    if (!referer || !referer.includes(process.env.FRONTEND_REFERER)) {
+      res.status(403).json({ error: "forbidden" })
+      return
+    }
 
     if (!trackId) {
       res.status(404).json({ error: "no id provided!" })
@@ -130,12 +139,17 @@ router.get("/tracks/:songid/:segmentid", jwtMiddleware, async (req, res) => {
 router.get("/output/:songid", jwtMiddleware, async (req, res) => {
   try {
     const trackId = req.params.songid;
-    // referer ellenőrzés, ha nem a frontend-tól jön akkor 403
-    // const referer = req.headers.referer;
-    // if(!referer || !referer.includes("gameportal.domain.tld")) {
-    //   res.status(403).json({error: "forbidden"})
-    //   return
-    // }
+
+    if (!process.env.FRONTEND_REFERER) {
+      res.status(500).json({ error: "Frontend referer not configured" })
+      return
+    }
+
+    const referer = req.headers.referer;
+    if (!referer || !referer.includes(process.env.FRONTEND_REFERER)) {
+      res.status(403).json({ error: "forbidden" })
+      return
+    }
 
     if (!trackId) {
       res.status(404).json({ error: "no id provided!" })
