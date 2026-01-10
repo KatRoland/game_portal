@@ -1,24 +1,31 @@
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 let accessToken: string | null = null;
-if (typeof window !== 'undefined') {
-  try {
-    accessToken = localStorage.getItem('accessToken');
-  } catch (e) { console.error(e) }
-}
 
-async function request(path: string, options: any = {}) {
+export async function request(path: string, options: any = {}) {
   const headers = new Headers(options.headers);
 
   if (accessToken) {
     headers.set('Authorization', `Bearer ${accessToken}`);
   }
 
-  const res = await fetch(`${BASE}${path}`, {
+  let res = await fetch(`${BASE}${path}`, {
     ...options,
     headers,
     credentials: 'include'
   });
+
+  if (res.status === 401 && path !== '/auth/refresh' && path !== '/auth/logout') {
+    const refreshed = await refreshToken();
+    if (refreshed && accessToken) {
+      headers.set('Authorization', `Bearer ${accessToken}`);
+      res = await fetch(`${BASE}${path}`, {
+        ...options,
+        headers,
+        credentials: 'include'
+      });
+    }
+  }
 
   if (!res.ok) {
     const text = await res.text();
@@ -29,30 +36,14 @@ async function request(path: string, options: any = {}) {
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
-  if (typeof window !== 'undefined') {
-    try {
-      if (token) localStorage.setItem('accessToken', token);
-      else localStorage.removeItem('accessToken');
-    } catch (e) { console.error(e) }
-  }
 }
 
-
+/**
+ * @deprecated
+ */
 export async function handleDiscordCallback(hash?: string): Promise<string | null> {
-  if (typeof window === 'undefined') return null;
-  const h = hash ?? window.location.hash;
-  if (!h || h.length < 2) return null;
-  const params = new URLSearchParams(h.slice(1));
-  const token = params.get('access_token');
-  if (token) {
-    setAccessToken(token);
-    try {
-      const cleanUrl = window.location.pathname + window.location.search;
-      window.history.replaceState(null, '', cleanUrl);
-    } catch (e) { console.error(e) }
-    return token;
-  }
-  return null;
+  await refreshToken();
+  return accessToken;
 }
 
 export async function refreshToken() {
