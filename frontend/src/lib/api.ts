@@ -67,9 +67,10 @@ export async function refreshToken() {
 }
 
 export function getDiscordAuthUrl() {
-  const clientId = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID;
-  const redirectUri = encodeURIComponent(process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI || '');
-  return `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=identify%20email`;
+  // const clientId = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID;
+  // const redirectUri = encodeURIComponent(process.env.NEXT_PUBLIC_DISCORD_REDIRECT_URI || '');
+  return `https://${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/discord/login`;
+  // return `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=identify%20email`;
 }
 
 export async function logout() {
