@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import prisma from "../db/prisma";
 import { Lobby } from "../types/Lobby";
 
-const JWT_SECRET = process.env.JWT_SECRET || "please_set_a_secret_in_env";
+import { JWT_SECRET } from "../config";
 
 type ClientInfo = {
   id: string;

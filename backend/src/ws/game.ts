@@ -20,7 +20,7 @@ import { KaraokeSong, KaraokeSongSegment, KaraokeSongLyrics, KaraokePlaylist, Ka
 import { handleKDMessages } from "./gamemodes/kd";
 import { SMASH_OR_PASS } from "../types/gamemode/SMASH_OR_PASS";
 
-const JWT_SECRET = process.env.JWT_SECRET || "please_set_a_secret_in_env";
+import { JWT_SECRET } from "../config";
 
 type ClientInfo = {
   id: string;

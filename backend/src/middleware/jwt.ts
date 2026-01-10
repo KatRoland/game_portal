@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import prisma from "../db/prisma";
 
-const JWT_SECRET = process.env.JWT_SECRET || "please_set_a_secret_in_env";
+import { JWT_SECRET } from "../config";
 
 export async function jwtMiddleware(req: Request, res: Response, next: NextFunction) {
   try {
