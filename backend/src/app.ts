@@ -1,5 +1,7 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import path from "path";
 import authRoutes from "./routes/auth";
 import meRoutes from "./routes/me";
@@ -12,8 +14,22 @@ import karaokeRouter from "./routes/karaoke"
 
 const app = express();
 
-// Reverse proxy (pl. NPM) mögött szükséges a 'trust proxy' beállítása, hogy az Express helyesen érzékelje a biztonságos kapcsolatokat és a kliens IP-ket.
-app.set('trust proxy', true);
+// Security Headers
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
+
+// Rate Limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: "Too many requests from this IP, please try again later."
+});
+
+app.use(limiter);
+app.set('trust proxy', 1);
 
 // CORS beállítások
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:8081,https://game.katroland.hu,https://gameapi.katroland.hu,https://discord.com')
@@ -25,7 +41,6 @@ console.log(allowedOrigins)
 
 const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) !== -1) {
       return callback(null, true);
@@ -33,7 +48,6 @@ const corsOptions: cors.CorsOptions = {
     return callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
-  // allow typical headers used by the frontend
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 };
