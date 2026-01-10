@@ -9,8 +9,13 @@ const router = Router();
 
 router.get("/playlists", jwtMiddleware, async (req, res) => {
 
+  if (!process.env.FRONTEND_REFERER) {
+    res.status(500).json({ error: "Frontend referer not configured" })
+    return
+  }
+
   const referer = req.headers.referer;
-  if (!referer || !referer.includes("game.katroland.hu")) {
+  if (!referer || !referer.includes(process.env.FRONTEND_REFERER)) {
     res.status(403).json({ error: "forbidden" })
     return
   }
@@ -31,8 +36,13 @@ router.get("/tracks/:id", jwtMiddleware, async (req, res) => {
   try {
     const trackId = req.params.id;
 
+    if (!process.env.FRONTEND_REFERER) {
+      res.status(500).json({ error: "Frontend referer not configured" })
+      return
+    }
+
     const referer = req.headers.referer;
-    if (!referer || !referer.includes("game.katroland.hu")) {
+    if (!referer || !referer.includes(process.env.FRONTEND_REFERER)) {
       res.status(403).json({ error: "forbidden" })
       return
     }

@@ -1,11 +1,18 @@
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { jwtMiddleware } from "../middleware/jwt";
 import { adminMiddleware } from "../middleware/admin";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
 import prisma from "../db/prisma";
-import { MusicQuizTrack, MusicQuizPlaylist } from "@prisma/client";
+import { MusicQuizTrack, MusicQuizPlaylist, MusicQuizPlaylistTrack } from "@prisma/client";
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegStatic from 'ffmpeg-static';
+
+// Set ffmpeg path from the static package
+if (ffmpegStatic) {
+  ffmpeg.setFfmpegPath(ffmpegStatic);
+}
 
 const router = Router();
 
@@ -26,13 +33,16 @@ const storage = multer.diskStorage({
   }
 });
 
-const fileFilter = (req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
+const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   const allowedMimeTypes = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg'];
+  const allowedExtensions = ['.mp3', '.wav', '.ogg', '.mpeg'];
 
-  if (allowedMimeTypes.includes(file.mimetype)) {
+  const ext = path.extname(file.originalname).toLowerCase();
+
+  if (allowedMimeTypes.includes(file.mimetype) && allowedExtensions.includes(ext)) {
     cb(null, true);
   } else {
-    cb(new Error('Only audio files are allowed'));
+    cb(new Error('Only audio files are allowed (invalid type or extension)'));
   }
 };
 
@@ -47,8 +57,13 @@ const upload = multer({
 
 router.get("/musicquiz/files", jwtMiddleware, async (req, res) => {
 
+  if (!process.env.FRONTEND_REFERER) {
+    res.status(500).json({ error: "Frontend referer not configured" })
+    return
+  }
+
   const referer = req.headers.referer;
-  if (!referer || !referer.includes("game.katroland.hu")) {
+  if (!referer || !referer.includes(process.env.FRONTEND_REFERER)) {
     res.status(403).json({ error: "forbidden" })
     return
   }
@@ -67,8 +82,13 @@ router.get("/musicquiz/files", jwtMiddleware, async (req, res) => {
 
 router.get("/musicquiz/playlists/:id/tracks", jwtMiddleware, async (req, res) => {
 
+  if (!process.env.FRONTEND_REFERER) {
+    res.status(500).json({ error: "Frontend referer not configured" })
+    return
+  }
+
   const referer = req.headers.referer;
-  if (!referer || !referer.includes("game.katroland.hu")) {
+  if (!referer || !referer.includes(process.env.FRONTEND_REFERER)) {
     res.status(403).json({ error: "forbidden" })
     return
   }
@@ -124,12 +144,39 @@ router.post("/upload/musicquiz", jwtMiddleware, adminMiddleware, upload.array('m
       });
 
       if (!playlist) {
+        // Clean up uploaded files if playlist not found
+        files.forEach(f => fs.unlinkSync(f.path));
         return res.status(404).json({ error: "Playlist not found" });
       }
     }
 
+    // Validate files content with ffmpeg (decoding check)
+    const validFiles: Express.Multer.File[] = [];
+    for (const file of files) {
+      try {
+        await new Promise((resolve, reject) => {
+          // Attempt to decode a bit of the file to verify it's valid audio
+          ffmpeg(file.path)
+            .format('null')
+            .duration(1) // Check first second to be fast
+            .on('end', resolve)
+            .on('error', reject)
+            .save(process.platform === 'win32' ? 'NUL' : '/dev/null');
+        });
+        validFiles.push(file);
+      } catch (err) {
+        console.error(`Invalid media file ${file.originalname}:`, err);
+        // Delete invalid file
+        fs.unlinkSync(file.path);
+      }
+    }
+
+    if (validFiles.length === 0) {
+      return res.status(400).json({ error: "All uploaded files failed validation (not valid and playable audio files)" });
+    }
+
     const dbFiles = await Promise.all(
-      files.map(async (file) => {
+      validFiles.map(async (file) => {
         const title = path.basename(file.originalname, path.extname(file.originalname));
         const relativePath = `music_quiz/${file.filename}`;
 
@@ -154,11 +201,18 @@ router.post("/upload/musicquiz", jwtMiddleware, adminMiddleware, upload.array('m
     );
 
     return res.status(201).json({
-      message: `Successfully uploaded ${files.length} file(s)`,
+      message: `Successfully uploaded ${validFiles.length} file(s) (processed ${files.length})`,
       tracks: dbFiles
     });
   } catch (error) {
     console.error("Error uploading files:", error);
+    // Try to cleanup files
+    const files = req.files as Express.Multer.File[];
+    if (files) {
+      files.forEach(f => {
+        if (fs.existsSync(f.path)) fs.unlinkSync(f.path)
+      });
+    }
     return res.status(500).json({ error: "Failed to upload files" });
   }
 });
