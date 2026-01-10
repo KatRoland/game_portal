@@ -14,12 +14,22 @@ export class WSClient {
   private heartbeatIntervalMs = 15000;
   private lastActivityAt: number = Date.now();
 
-  constructor(private accessToken: string, private page: string) { }
+  private messageQueue: WSMessage[] = [];
 
-  connect() {
+  constructor(private tokenProvider: () => Promise<string | null>, private page: string) { }
+
+  async connect() {
     if (this.ws?.readyState === WebSocket.OPEN) return;
 
     this.setStatus('connecting');
+
+    const token = await this.tokenProvider();
+    if (!token) {
+      console.error("WS Connect failed: No access token available");
+      this.setStatus('disconnected');
+      this.scheduleReconnect();
+      return;
+    }
 
     let base = process.env.NEXT_PUBLIC_WS_BASE_URL || process.env.WS_BASE_URL || 'ws://localhost:4000/ws';
 
@@ -34,7 +44,7 @@ export class WSClient {
 
     console.log(`Connecting to WebSocket at ${base} for page ${this.page}`);
     const wsUrl = new URL(`${base}/${this.page}`);
-    wsUrl.searchParams.set('token', this.accessToken);
+    wsUrl.searchParams.set('token', token);
 
     this.ws = new WebSocket(wsUrl.toString());
 
@@ -46,6 +56,12 @@ export class WSClient {
       }
       this.reconnectAttempts = 0;
       this.setStatus('connected');
+
+      while (this.messageQueue.length > 0) {
+        const msg = this.messageQueue.shift();
+        if (msg) this.send(msg);
+      }
+
       this.startHeartbeat();
     };
 
@@ -113,9 +129,13 @@ export class WSClient {
   }
 
   send(message: WSMessage): boolean {
-    if (this.ws?.readyState !== WebSocket.OPEN) return false;
-    this.ws.send(JSON.stringify(message));
-    return true;
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(message));
+      return true;
+    } else {
+      this.messageQueue.push(message);
+      return true;
+    }
   }
 
   on(type: string, handler: (payload: any) => void) {
@@ -202,11 +222,23 @@ export function getWSStatus() {
   return wsClient ? wsClient.getStatus() : 'disconnected';
 }
 
+
 export function createWS(accessToken: string, page: string) {
   if (wsClient) {
     wsClient.disconnect();
   }
-  wsClient = new WSClient(accessToken, page);
+  const provider = async () => {
+    const { getAccessToken, refreshToken } = require('./api');
+    let token = getAccessToken();
+    if (!token) {
+      await refreshToken();
+      token = getAccessToken();
+    }
+    return token || null;
+  };
+
+  wsClient = new WSClient(provider, page);
+
   pendingStatusSubscribers.forEach((cb) => wsClient && wsClient.onStatus(cb));
   pendingStatusSubscribers.length = 0;
   wsClient.connect();
