@@ -5,7 +5,7 @@ import jwt from "jsonwebtoken";
 
 const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS ?? 30 * 24 * 60 * 60 * 1000); // default 30 days
 const ACCESS_TOKEN_EXP = process.env.ACCESS_TOKEN_EXP ?? "15m"; // JWT access token expiry
-const JWT_SECRET = process.env.JWT_SECRET || "please_set_a_secret_in_env";
+import { JWT_SECRET } from "../config";
 
 const router = Router();
 
