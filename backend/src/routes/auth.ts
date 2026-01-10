@@ -2,6 +2,7 @@ import { Router } from "express";
 import prisma from "../db/prisma";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
 
 const SESSION_TTL_MS = Number(process.env.SESSION_TTL_MS ?? 30 * 24 * 60 * 60 * 1000); // default 30 days
 const ACCESS_TOKEN_EXP = process.env.ACCESS_TOKEN_EXP ?? "15m"; // JWT access token expiry
@@ -127,13 +128,21 @@ router.get("/discord/callback", async (req, res) => {
 
     // session létrehozása
     const refreshToken = crypto.randomBytes(48).toString("hex");
+    const hashedRefresh = await bcrypt.hash(refreshToken, 10);
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-    await prisma.session.create({ data: { token: crypto.randomBytes(16).toString("hex"), refreshToken, userId: dbUser.id, expiresAt } });
+    const session = await prisma.session.create({
+      data: {
+        token: crypto.randomBytes(16).toString("hex"),
+        refreshToken: hashedRefresh,
+        userId: dbUser.id,
+        expiresAt
+      }
+    });
 
-    // refresh cookie
+    // refresh cookie - format: sessionId:refreshToken
     const maxAgeSec = Math.floor(SESSION_TTL_MS / 1000);
     const cookieParts = [
-      `refresh=${encodeURIComponent(refreshToken)}`,
+      `refresh=${encodeURIComponent(`${session.id}:${refreshToken}`)}`,
       `Path=/`,
       `HttpOnly`,
       `SameSite=Lax`,
@@ -184,31 +193,50 @@ router.post("/refresh", async (req, res) => {
       if (idx > -1) acc[cur.slice(0, idx)] = decodeURIComponent(cur.slice(idx + 1));
       return acc;
     }, {}) ?? {};
-    const refresh = cookies["refresh"];
-    if (!refresh) return res.status(401).json({ error: "missing_refresh" });
+    const refreshCookie = cookies["refresh"];
+    if (!refreshCookie) return res.status(401).json({ error: "missing_refresh" });
 
-    const session = await prisma.session.findUnique({ where: { refreshToken: refresh }, include: { user: true } });
+    // Parse session_id:token
+    const parts = refreshCookie.split(':');
+    if (parts.length !== 2) return res.status(401).json({ error: "invalid_refresh_format" });
+
+    const sessionId = parseInt(parts[0]);
+    const refreshToken = parts[1];
+
+    if (isNaN(sessionId)) return res.status(401).json({ error: "invalid_session_id" });
+
+    // Find session by ID
+    const session = await prisma.session.findUnique({ where: { id: sessionId }, include: { user: true } });
+
     if (!session || session.revoked) return res.status(401).json({ error: "invalid_refresh" });
+
+    // Verify hash
+    const isValid = await bcrypt.compare(refreshToken, session.refreshToken);
+    if (!isValid) return res.status(401).json({ error: "invalid_refresh_token" });
+
     if (session.expiresAt < new Date()) {
       await prisma.session.delete({ where: { id: session.id } }).catch(() => { });
       return res.status(401).json({ error: "expired_refresh" });
     }
 
-    // rotate refresh token -- Ideiglenesen nem használt
-    // const newRefresh = crypto.randomBytes(48).toString("hex");
-    // await prisma.session.update({ where: { id: session.id }, data: { refreshToken: newRefresh } });
+    // Rotate refresh token
+    const newRefresh = crypto.randomBytes(48).toString("hex");
+    const newHash = await bcrypt.hash(newRefresh, 10);
 
-    // // új cookie
-    // const maxAgeSec2 = Math.floor(SESSION_TTL_MS / 1000);
-    // const cookieParts2 = [
-    //   `refresh=${encodeURIComponent(newRefresh)}`,
-    //   `Path=/`,
-    //   `HttpOnly`,
-    //   `SameSite=Lax`,
-    //   `Max-Age=${maxAgeSec2}`,
-    // ];
-    // if (process.env.COOKIE_SECURE === "true") cookieParts2.push("Secure");
-    // res.setHeader("Set-Cookie", cookieParts2.join("; "));
+    // Update session with new hash
+    await prisma.session.update({ where: { id: session.id }, data: { refreshToken: newHash } });
+
+    // New cookie
+    const maxAgeSec2 = Math.floor(SESSION_TTL_MS / 1000);
+    const cookieParts2 = [
+      `refresh=${encodeURIComponent(`${session.id}:${newRefresh}`)}`,
+      `Path=/`,
+      `HttpOnly`,
+      `SameSite=Lax`,
+      `Max-Age=${maxAgeSec2}`,
+    ];
+    if (process.env.COOKIE_SECURE === "true") cookieParts2.push("Secure");
+    res.setHeader("Set-Cookie", cookieParts2.join("; "));
 
     // issue new access token
     const accessToken2 = (jwt as any).sign({ sub: String(session.userId) }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXP });
@@ -227,9 +255,12 @@ router.post("/logout", async (req, res) => {
       if (idx > -1) acc[cur.slice(0, idx)] = decodeURIComponent(cur.slice(idx + 1));
       return acc;
     }, {}) ?? {};
-    const refresh = cookies["refresh"];
-    if (refresh) {
-      await prisma.session.deleteMany({ where: { refreshToken: refresh } }).catch(() => { });
+    const refreshCookie = cookies["refresh"];
+    if (refreshCookie) {
+      const parts = refreshCookie.split(':');
+      if (parts.length === 2 && !isNaN(parseInt(parts[0]))) {
+        await prisma.session.delete({ where: { id: parseInt(parts[0]) } }).catch(() => { });
+      }
     }
     // clear cookie
     res.setHeader("Set-Cookie", [`refresh=; Path=/; HttpOnly; Max-Age=0`]);
