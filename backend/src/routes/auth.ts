@@ -163,9 +163,10 @@ router.get("/discord/callback", async (req, res) => {
     }
 
     if (redirectTo) {
-      // redirect with access token
-      const frag = `access_token=${encodeURIComponent(accessTokenJwt)}&scope=${encodeURIComponent(tokenJson.scope ?? "")}`;
-      return res.redirect(`${redirectTo}#${frag}`);
+      // Redirect without sensitive token in URL.
+      // The client works by having the 'refresh_token' cookie set (HttpOnly).
+      // The client will automatically call /auth/refresh to get the access token.
+      return res.redirect(redirectTo);
     }
 
     return res.json({ user: dbUser, accessToken: accessTokenJwt, scope: tokenJson.scope });
