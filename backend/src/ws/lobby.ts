@@ -32,24 +32,32 @@ class LobbyServer {
     } catch (err) {
     }
 
+    if (!accessToken) {
+      console.log(`WS connection rejected (no token): ${id}`);
+      ws.close(1008, "Token required");
+      return;
+    }
+
     const info: ClientInfo = { id, ws, remote, accessToken };
-    if (accessToken) {
-      try {
-        const payload = (jwt as any).verify(accessToken, JWT_SECRET) as any;
-        const sub = payload && (payload.sub ?? payload.userId ?? payload.id);
-        if (sub) {
-          const userId = Number(sub);
-          if (!Number.isNaN(userId)) {
-            const dbUser = await prisma.user.findUnique({ where: { id: userId } });
-            if (dbUser) {
-              info.user = { id: String(dbUser.id), username: dbUser.username ?? null, avatar: dbUser.avatar ?? null, isAdmin: (dbUser as any).isAdmin ?? false };
-              info.name = dbUser.username ?? info.name;
-            }
-          }
-        }
-      } catch (err) {
-        console.debug("WS token verification failed for client", id);
-      }
+
+    try {
+      const payload = (jwt as any).verify(accessToken, JWT_SECRET) as any;
+      const sub = payload && (payload.sub ?? payload.userId ?? payload.id);
+      if (!sub) throw new Error("No sub in token");
+
+      const userId = Number(sub);
+      if (Number.isNaN(userId)) throw new Error("Invalid userId");
+
+      const dbUser = await prisma.user.findUnique({ where: { id: userId } });
+      if (!dbUser) throw new Error("User not found");
+
+      info.user = { id: String(dbUser.id), username: dbUser.username ?? null, avatar: dbUser.avatar ?? null, isAdmin: (dbUser as any).isAdmin ?? false };
+      info.name = dbUser.username ?? info.name;
+
+    } catch (err) {
+      console.debug("WS token verification failed for client", id, err);
+      ws.close(1008, "Invalid token");
+      return;
     }
 
     this.clients.set(id, info);
