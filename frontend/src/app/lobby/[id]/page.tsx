@@ -87,6 +87,7 @@ export default function LobbyRoomPage() {
       wsRef.current.on('lobby:started', (payload: { lobbyId: string; startedAt: string }) => {
         if (payload.lobbyId !== id) return
         console.log('Lobby started', payload)
+        try { router.push(`/game/${payload.lobbyId}`) } catch (e) { console.error(e) }
       })
 
 

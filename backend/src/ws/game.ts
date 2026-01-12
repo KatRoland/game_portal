@@ -1,4 +1,4 @@
-import type WebSocket from "ws";
+import WebSocket from "ws";
 import type http from "http";
 import jwt from "jsonwebtoken";
 import prisma from "../db/prisma";
@@ -21,6 +21,7 @@ import { handleKDMessages } from "./gamemodes/kd";
 import { SMASH_OR_PASS } from "../types/gamemode/SMASH_OR_PASS";
 
 import { JWT_SECRET } from "../config";
+import { endGame } from "./handlers";
 
 type ClientInfo = {
   id: string;
@@ -90,6 +91,9 @@ class GameServer {
     } catch { }
 
     if (!parsed || typeof parsed.type !== "string") return;
+
+    const user = this.clients.get(id)?.user;
+    if (!user) return;
 
     if (parsed.type.startsWith("qa:")) {
       const gameId = typeof parsed.payload?.gameId === "string" ? parsed.payload.gameId : null;
@@ -196,8 +200,6 @@ class GameServer {
           game.nextGameModes = lobby.gameModeOrder;
           if (game.mode === GameMode.QA) {
             game.currentGameModeData = { question: null, answers: [], Scoreboard: Scoreboard } as QA;
-            console.log("QA STARTING")
-            console.log(game)
           }
           else if (game.mode === GameMode.MUSIC_QUIZ) {
 
@@ -421,7 +423,7 @@ class GameServer {
         const game = this.games.find(g => g.id === gameId);
         if (!game || !playerId) return;
 
-        if (game.lobby.host.id !== id) {
+        if (game.lobby.host.id !== user.id) {
           this.send(this.clients.get(id)!.ws, { type: "game:not_authorized", message: "not_authorized" });
           return;
         }
@@ -441,7 +443,7 @@ class GameServer {
         const game = this.games.find(g => g.id === gameId);
         if (!game || !playerId) return;
 
-        if (game.lobby.host.id !== id) {
+        if (game.lobby.host.id !== user.id) {
           this.send(this.clients.get(id)!.ws, { type: "game:not_authorized", message: "not_authorized" });
           return;
         }
@@ -467,7 +469,7 @@ class GameServer {
         const gameId = typeof parsed.payload?.gameId === "string" ? parsed.payload.gameId : null;
         const game = this.games.find(g => g.id === gameId);
         if (!game) return;
-        if (game.lobby.host.id !== id) {
+        if (game.lobby.host.id !== user.id) {
           this.send(this.clients.get(id)!.ws, { type: "game:not_authorized", message: "not_authorized" });
           return;
         }
@@ -554,7 +556,7 @@ class GameServer {
         if (gameIndex === -1) return;
         const game = this.games[gameIndex];
 
-        if (game.lobby.host.id !== id) {
+        if (game.lobby.host.id != user.id) {
           this.send(this.clients.get(id)!.ws, { type: "game:not_authorized", message: "not_authorized" });
           return;
         }
@@ -571,13 +573,15 @@ class GameServer {
         if (gameIndex === -1) return;
         const game = this.games[gameIndex];
 
-        if (game.lobby.host.id !== id) {
-          this.send(this.clients.get(id)!.ws, { type: "game:not_authorized", message: "not_authorized" });
+        if (game.lobby.host.id != user.id) {
+
+          this.send(this.clients.get(id)!.ws, { type: "game:not_authorized", message: `not_authorized ${game.lobby.host.id} != ${user.id}` });
           return;
         }
 
         console.log("Finishing game:", game);
         this.games.splice(gameIndex, 1);
+        endGame(gameId);
         this.send(this.clients.get(id)!.ws, { type: "game:finished_response_host", payload: { lobbyId: gameId } });
         console.log("game Id to finish:", gameId);
         break;;
@@ -649,7 +653,221 @@ class GameServer {
     return Array.from(this.clients.values()).map((c) => ({ id: c.id, name: c.name ?? null, remote: c.remote }));
   }
 
-  public initGame() {
+  public async initGame(id: string, gameId: string, lobby: Lobby, clientInfo: ClientInfo) {
+    console.log("GAME INIT")
+    console.log(gameId)
+    console.log(lobby)
+    if (clientInfo) {
+      console.log("CLIENT INFO")
+      console.log(clientInfo)
+      const Scoreboard = { scores: lobby.players.map(p => ({ playerId: p.id, playerName: p.username || 'Anonymous', score: 0 })) };
+      if (!lobby.gameModeOrder || lobby.gameModeOrder.length === 0) {
+        this.send(clientInfo.ws, { type: "game:init:error", message: "no_game_modes_configured" });
+        return;
+      }
+
+      const FirstGameMode: NextGameMode = lobby.gameModeOrder[0];
+      lobby.gameModeOrder.shift()
+
+      const game: Game = { id: gameId, lobby: lobby, startedAt: new Date().toISOString(), mode: FirstGameMode.type, nextGameModes: [], Scoreboard: Scoreboard };
+      game.nextGameModes = lobby.gameModeOrder;
+      if (game.mode === GameMode.QA) {
+        game.currentGameModeData = { question: null, answers: [], Scoreboard: Scoreboard } as QA;
+      }
+      else if (game.mode === GameMode.MUSIC_QUIZ) {
+
+        if (!FirstGameMode.playlist) {
+          this.send(this.clients.get(id)!.ws, { type: "game:error", message: "music_quiz_requires_playlist" });
+          return;
+        }
+
+        const playlist = await prisma.musicQuizPlaylistTrack.findMany({
+          where: { playlistId: FirstGameMode.playlist },
+          include: { track: true },
+        }).then(playlist => {
+          if (!playlist) {
+            this.send(this.clients.get(id)!.ws, { type: "game:error", message: "music_quiz_playlist_not_found" });
+            return;
+          }
+          return playlist;
+        });
+
+        if (!playlist) {
+          this.send(this.clients.get(id)!.ws, { type: "game:error", message: "music_quiz_playlist_not_found" });
+          return;
+        }
+
+        const shuffledTracks = playlist.sort(() => 0.5 - Math.random());
+
+        const Scoreboard: Scoreboard = {
+          scores: game.lobby.players.map(p => ({ playerId: p.id, playerName: p.username ?? 'Anonymous', score: 0 })),
+        };
+
+        const currentGameModeData: MUSIC_QUIZ = {
+          currentTrackIndex: 0,
+          currentTrack: shuffledTracks[0].track,
+          tracks: shuffledTracks.map(t => t.track),
+          Scoreboard: Scoreboard,
+          replays: [],
+          answers: [],
+        };
+
+
+        game.currentGameModeData = currentGameModeData;
+        game.currentGameModeData.trackLength = currentGameModeData.tracks.length
+
+
+      }
+      else if (game.mode === GameMode.Karaoke_Solo) {
+
+        if (!FirstGameMode.playlist) {
+          this.send(this.clients.get(id)!.ws, { type: "game:error", message: "karaoke_solo_requires_playlist" });
+          return;
+        }
+
+        const playlist = await prisma.karaokePlaylist.findFirst({
+          where: {
+            id: Number(FirstGameMode.playlist)
+          },
+          include: {
+            Songs: {
+              include: {
+                Segments: {
+                  include: {
+                    Rows: {
+                      orderBy: {
+                        index: 'asc'
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        })
+
+        if (!playlist) return;
+
+        const kp: KaraokePlaylist = playlist
+
+        const Scoreboard: Scoreboard = {
+          scores: game.lobby.players.map(p => ({ playerId: p.id, playerName: p.username ?? 'Anonymous', score: 0 })),
+        };
+
+        const pSegments: KaraokePlayerSegment[] = []
+
+        game.lobby.players.forEach(p => {
+          pSegments.push({ playerId: Number(p.id), segmentId: 0 })
+        })
+
+        const currentSong: KaraokeCurrentSong = {
+          Song: playlist.Songs[0],
+          pSegments: pSegments
+        }
+
+
+        game.currentGameModeData = { Playlist: (playlist as KaraokePlaylist), Scoreboard: Scoreboard as Scoreboard, currentSong: currentSong, inputs: [] as KaraokeFile[], outputs: [] as KaraokeFile[], state: "pending", isVoteOpen: false, votes: [], currentSongIndex: 0 } as Karaoke_Solo;
+      }
+      else if (game.mode === GameMode.SMASH_OR_PASS) {
+        const order = [...game.lobby.players.map(p => String(p.id))].sort(() => Math.random() - 0.5);
+        const Scoreboard: Scoreboard = {
+          scores: game.lobby.players.map(p => ({ playerId: p.id, playerName: p.username ?? 'Anonymous', score: 0 })),
+        };
+        game.currentGameModeData = { order, currentIndex: 0, submissions: [], isVotingOpen: false, Scoreboard } as any;
+      }
+      else if (game.mode === GameMode.SMASH_OR_PASS_PLAYLIST) {
+        const Scoreboard: Scoreboard = {
+          scores: game.lobby.players.map(p => ({ playerId: p.id, playerName: p.username ?? 'Anonymous', score: 0 })),
+        };
+
+        //load items from database
+        const items = await prisma.sopPlaylist.findMany({
+          where: { id: FirstGameMode.playlist },
+          include: {
+            Items: true
+          }
+        }).then(items => {
+          if (!items) {
+            this.send(this.clients.get(id)!.ws, { type: "game:error", message: "smash_or_pass_playlist_not_found" });
+            return;
+          }
+          return items;
+        });
+
+        if (!items) {
+          this.send(this.clients.get(id)!.ws, { type: "game:error", message: "smash_or_pass_playlist_not_found" });
+          return;
+        }
+
+        console.log(`items:`, items);
+
+        game.currentGameModeData = { items: items[0].Items, currentIndex: 0, currentVotes: [], pickerId: null, Scoreboard } as any;
+      }
+
+      else if (game.mode === GameMode.Karaoke_Duett) {
+
+        if (!FirstGameMode.playlist) {
+          this.send(this.clients.get(id)!.ws, { type: "game:error", message: "karaoke_duett_requires_playlist" });
+          return;
+        }
+
+        const playlist = await prisma.karaokePlaylist.findFirst({
+          where: {
+            id: Number(FirstGameMode.playlist)
+          },
+          include: {
+            Songs: {
+              include: {
+                Segments: {
+                  include: {
+                    Rows: {
+                      orderBy: {
+                        index: 'asc'
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        })
+
+        if (!playlist) return;
+
+        const kp: KaraokePlaylist = playlist
+
+        const Scoreboard: Scoreboard = {
+          scores: game.lobby.players.map(p => ({ playerId: p.id, playerName: p.username ?? 'Anonymous', score: 0 })),
+        };
+
+        const pSegments: KaraokePlayerSegment[] = []
+        const segmentIndices = playlist.Songs[0].Segments.map((_, idx) => idx);
+        for (let i = segmentIndices.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [segmentIndices[i], segmentIndices[j]] = [segmentIndices[j], segmentIndices[i]];
+        }
+
+        game.lobby.players.forEach((p, idx) => {
+          pSegments.push({ playerId: Number(p.id), segmentId: segmentIndices[idx % segmentIndices.length] });
+        });
+
+        const currentSong: KaraokeCurrentSong = {
+          Song: playlist.Songs[0],
+          pSegments: pSegments
+        }
+
+
+        game.currentGameModeData = { Playlist: (playlist as KaraokePlaylist), Scoreboard: Scoreboard as Scoreboard, currentSong: currentSong, inputs: [] as KaraokeFile[], outputs: [] as KaraokeFile[], state: "pending", isVoteOpen: false, votes: [], currentSongIndex: 0 } as Karaoke_Duett;
+      }
+
+      this.games.push(game);
+      const gameCopy = { ...game };
+      if (gameCopy.mode === GameMode.MUSIC_QUIZ) {
+        gameCopy.currentGameModeData = { ...gameCopy.currentGameModeData, currentTrackIndex: 0, currentTrack: null, tracks: [] } as MUSIC_QUIZ;
+      }
+      console.log("gameCopy", gameCopy);
+      this.broadcastToLobby(lobby.id, { type: "game:started", payload: { game: gameCopy } });
+    };
 
   }
 }
