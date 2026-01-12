@@ -77,6 +77,8 @@ class GameServer {
     ws.on("close", () => this.unregister(id));
     ws.on("error", (err) => console.error("WS error:", err));
 
+    this.send(ws, { type: "game:welcome", payload: { id } });
+
     console.log(`game client connected: ${id}`);
   }
 
@@ -178,6 +180,9 @@ class GameServer {
         const gameId = typeof parsed.payload?.gameId === "string" ? parsed.payload.gameId : null;
         const lobby: Lobby = parsed.payload.lobby;
         const clientInfo = this.clients.get(id);
+        console.log("GAME INIT")
+        console.log(gameId)
+        console.log(lobby)
         if (clientInfo) {
           const Scoreboard = { scores: lobby.players.map(p => ({ playerId: p.id, playerName: p.username || 'Anonymous', score: 0 })) };
           if (!lobby.gameModeOrder || lobby.gameModeOrder.length === 0) {
@@ -191,6 +196,8 @@ class GameServer {
           game.nextGameModes = lobby.gameModeOrder;
           if (game.mode === GameMode.QA) {
             game.currentGameModeData = { question: null, answers: [], Scoreboard: Scoreboard } as QA;
+            console.log("QA STARTING")
+            console.log(game)
           }
           else if (game.mode === GameMode.MUSIC_QUIZ) {
 
@@ -390,6 +397,8 @@ class GameServer {
       case "game:load": {
         const gameId = typeof parsed.payload?.gameId === "string" ? parsed.payload.gameId : "null";
         const game = this.games.find(g => g.id === gameId);
+        console.log(game)
+        console.log("GameID:  " + gameId)
         if (!game) {
           this.send(this.clients.get(id)!.ws, { type: "game:not_found", message: "invalid_game_id" });
           return;
@@ -411,6 +420,12 @@ class GameServer {
         const increment = typeof parsed.payload?.increment === "number" ? parsed.payload.increment : 1;
         const game = this.games.find(g => g.id === gameId);
         if (!game || !playerId) return;
+
+        if (game.lobby.host.id !== id) {
+          this.send(this.clients.get(id)!.ws, { type: "game:not_authorized", message: "not_authorized" });
+          return;
+        }
+
         const scoreEntry = (game.currentGameModeData.Scoreboard as Scoreboard).scores.find(s => s.playerId === playerId);
         if (scoreEntry) {
           scoreEntry.score += increment;
@@ -425,6 +440,12 @@ class GameServer {
         const decrement = typeof parsed.payload?.decrement === "number" ? parsed.payload.decrement : 1;
         const game = this.games.find(g => g.id === gameId);
         if (!game || !playerId) return;
+
+        if (game.lobby.host.id !== id) {
+          this.send(this.clients.get(id)!.ws, { type: "game:not_authorized", message: "not_authorized" });
+          return;
+        }
+
         const scoreEntry = (game.currentGameModeData.Scoreboard as Scoreboard).scores.find(s => s.playerId === playerId);
         if (scoreEntry) {
           scoreEntry.score -= decrement;
@@ -446,6 +467,10 @@ class GameServer {
         const gameId = typeof parsed.payload?.gameId === "string" ? parsed.payload.gameId : null;
         const game = this.games.find(g => g.id === gameId);
         if (!game) return;
+        if (game.lobby.host.id !== id) {
+          this.send(this.clients.get(id)!.ws, { type: "game:not_authorized", message: "not_authorized" });
+          return;
+        }
         if (game.nextGameModes.length > 0) {
           const nextMode = game.nextGameModes.shift()!;
           game.mode = nextMode.type;
@@ -528,6 +553,12 @@ class GameServer {
         const gameIndex = this.games.findIndex(g => g.id === gameId);
         if (gameIndex === -1) return;
         const game = this.games[gameIndex];
+
+        if (game.lobby.host.id !== id) {
+          this.send(this.clients.get(id)!.ws, { type: "game:not_authorized", message: "not_authorized" });
+          return;
+        }
+
         game.mode = GameMode.Ended;
         this.broadcastToLobby(gameId, { type: "game:game_ended", payload: { game: game } });
         this.games.splice(gameIndex, 1);
@@ -539,6 +570,12 @@ class GameServer {
         const gameIndex = this.games.findIndex(g => g.id === gameId);
         if (gameIndex === -1) return;
         const game = this.games[gameIndex];
+
+        if (game.lobby.host.id !== id) {
+          this.send(this.clients.get(id)!.ws, { type: "game:not_authorized", message: "not_authorized" });
+          return;
+        }
+
         console.log("Finishing game:", game);
         this.games.splice(gameIndex, 1);
         this.send(this.clients.get(id)!.ws, { type: "game:finished_response_host", payload: { lobbyId: gameId } });
@@ -610,6 +647,10 @@ class GameServer {
 
   getUserList() {
     return Array.from(this.clients.values()).map((c) => ({ id: c.id, name: c.name ?? null, remote: c.remote }));
+  }
+
+  public initGame() {
+
   }
 }
 

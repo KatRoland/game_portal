@@ -5,6 +5,7 @@ import { createWS, getWSClient } from '@/lib/ws'
 import { useUser } from '@/contexts/UserContext'
 import { useRouter } from 'next/navigation'
 import { Lobby } from '@/types'
+import { getAccessToken } from '@/lib/api'
 
 export default function LobbyPage() {
 	const { user, loading } = useUser()
@@ -22,7 +23,7 @@ export default function LobbyPage() {
 				return
 			}
 
-			const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+			const token = typeof window !== 'undefined' ? getAccessToken() : null
 			if (!token) {
 				router.push('/auth/login')
 				return

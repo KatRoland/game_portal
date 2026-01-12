@@ -23,7 +23,7 @@ router.get("/discord/login", (req, res) => {
 
   res.cookie("oauth_state", state, {
     httpOnly: true,
-    secure: process.env.COOKIE_SECURE === "true",
+    secure: process.env.COOKIE_SECURE == "true",
     sameSite: "lax",
     maxAge: 5 * 60 * 1000,
   });
@@ -32,7 +32,7 @@ router.get("/discord/login", (req, res) => {
   if (returnTo && returnTo.startsWith("/")) {
     res.cookie("oauth_redirect", returnTo, {
       httpOnly: true,
-      secure: process.env.COOKIE_SECURE === "true",
+      secure: process.env.COOKIE_SECURE == "true",
       sameSite: "lax",
       maxAge: 5 * 60 * 1000,
     });
@@ -46,6 +46,7 @@ router.get("/discord/login", (req, res) => {
     state: state,
   });
 
+  // res.json({ url: `https://discord.com/api/oauth2/authorize?${params.toString()}` });
   res.redirect(`https://discord.com/api/oauth2/authorize?${params.toString()}`);
 });
 

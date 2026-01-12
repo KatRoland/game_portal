@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Game, SMASH_OR_PASS, SOP_FN, GameFN, Scoreboard } from '@/types';
 import { useUser } from '@/contexts/UserContext';
-import { getUserAvatar } from '@/lib/api';
+import { getUserAvatar, getAccessToken } from '@/lib/api';
 
 type Props = {
   isHost: boolean
@@ -34,7 +34,7 @@ export default function SmashOrPass({ isHost, GameData, IMGRFN, GameFN }: Props)
       const form = new FormData();
       form.append('image', file);
       const base = process.env.NEXT_PUBLIC_API_BASE_URL;
-      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+      const token = typeof window !== 'undefined' ? getAccessToken() : null;
       const res = await fetch(`${base}/imgr/upload`, {
         method: 'POST',
         headers: token ? { Authorization: `Bearer ${token}` } as any : undefined,

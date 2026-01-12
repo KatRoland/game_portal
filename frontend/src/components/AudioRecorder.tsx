@@ -2,6 +2,8 @@
 
 import { useMic } from "@/contexts/MicContext";
 import { useState, useRef, useEffect } from "react";
+import { getAccessToken } from '@/lib/api'
+
 
 type RecordingStatus = "inactive" | "recording";
 
@@ -77,7 +79,7 @@ const AudioRecorder = ({ recording, recordCallBack, hidden }: { recording: boole
         const response = await fetch('https://gameapi.katroland.hu/karaoke/record', {
           method: "POST",
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+            'Authorization': `Bearer ${getAccessToken()}`
           },
           body: formData,
         });

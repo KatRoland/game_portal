@@ -21,7 +21,7 @@ export default function LoginPage() {
 
   const handleDiscordLogin = () => {
     const returnPath = searchParams.get('return') || '/'
-    window.location.href = getDiscordAuthUrl() + `&returnTo=${encodeURIComponent(returnPath)}`
+    window.location.href = getDiscordAuthUrl()
   }
 
   return (

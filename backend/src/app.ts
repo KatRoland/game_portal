@@ -33,15 +33,15 @@ app.use(helmet({
 }));
 
 // Rate Limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: "Too many requests from this IP, please try again later."
-});
+// const limiter = rateLimit({
+//   windowMs: 15 * 60 * 1000,
+//   max: 100,
+//   standardHeaders: true,
+//   legacyHeaders: false,
+//   message: "Too many requests from this IP, please try again later."
+// });
 
-app.use(limiter);
+// app.use(limiter);
 app.set('trust proxy', 1);
 
 // CORS beállítások
@@ -69,6 +69,9 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(express.json());
 
+app.use("/health", (_req, res) => {
+  res.json({ status: "ok" });
+});
 app.use("/uploads", express.static(path.resolve("uploads")));
 
 app.get("/health", (_req, res) => {
