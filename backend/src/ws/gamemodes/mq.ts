@@ -3,7 +3,7 @@ import { MUSIC_QUIZ, Answer } from "../../types/gamemode/MUSIC_QUIZ";
 import { Game } from "../../types/Game";
 import prisma from "../../db/prisma";
 
-export async function handleMQMessages(user: any, data: any, game: Game, broadcast: (msg: any) => void, send: (msg: any) => void) {
+export async function handleMQMessages(user: any, data: any, game: Game, broadcast: (msg: any) => void, send: (msg: any) => void, sendToUser: (userId: string, msg: any) => void) {
     console.log('Handling MQ messages', data);
     console.log('Current game state', game);
     console.log("user:", user);
@@ -83,12 +83,26 @@ export async function handleMQMessages(user: any, data: any, game: Game, broadca
             const answer = typeof data.payload?.answer === "string" ? data.payload.answer : null;
             if (playerId && playerName && answer) {
                 if ((game.currentGameModeData as MUSIC_QUIZ).answers.find(a => a.playerId === playerId)) {
+                    send({ type: "mq:already_answered", payload: { playerId: playerId } })
                     console.log(`Player ${playerId} has already answered.`);
                     return;
                 }
                 (game.currentGameModeData as MUSIC_QUIZ).answers.push({ playerId, playerName, answer, state: "pending" });
                 console.log("Updated answers:", (game.currentGameModeData as MUSIC_QUIZ).answers);
-                broadcast({ type: "mq:update_answers", payload: { answers: (game.currentGameModeData as MUSIC_QUIZ).answers } });
+                const players = game.lobby.players;
+                const playerswhoanswered = players.filter(p => (game.currentGameModeData as MUSIC_QUIZ).answers.find(a => a.playerId === p.id));
+
+                const recipients = new Set<string>();
+                recipients.add(game.lobby.host.id);
+                playerswhoanswered.forEach(p => recipients.add(p.id));
+
+                for (const uid of recipients) {
+                    sendToUser(uid, { type: "mq:update_answers", payload: { answers: (game.currentGameModeData as MUSIC_QUIZ).answers } });
+                }
+
+                if (playerswhoanswered.length === players.length) {
+                    broadcast({ type: "mq:update_answers", payload: { answers: (game.currentGameModeData as MUSIC_QUIZ).answers } });
+                }
             }
             break;
         }
@@ -102,7 +116,16 @@ export async function handleMQMessages(user: any, data: any, game: Game, broadca
                     answer.state = "correct";
                     const entry = (game.currentGameModeData as MUSIC_QUIZ).Scoreboard.scores.find(s => s.playerId === playerId);
                     if (entry) entry.score += 1;
-                    broadcast({ type: "mq:update_answers", payload: { answers: (game.currentGameModeData as MUSIC_QUIZ).answers } });
+
+                    // Dedicated logic for update_answers
+                    const recipients = new Set<string>();
+                    recipients.add(game.lobby.host.id);
+                    (game.currentGameModeData as MUSIC_QUIZ).answers.forEach(a => recipients.add(a.playerId));
+
+                    for (const uid of recipients) {
+                        sendToUser(uid, { type: "mq:update_answers", payload: { answers: (game.currentGameModeData as MUSIC_QUIZ).answers } });
+                    }
+
                     broadcast({ type: "mq:update_scoreboard", payload: { Scoreboard: (game.currentGameModeData as MUSIC_QUIZ).Scoreboard } });
                 }
             }
@@ -118,7 +141,16 @@ export async function handleMQMessages(user: any, data: any, game: Game, broadca
                     const entry = (game.currentGameModeData as MUSIC_QUIZ).Scoreboard.scores.find(s => s.playerId === playerId);
                     if (entry) entry.score -= 1;
                     answer.state = "incorrect";
-                    broadcast({ type: "mq:update_answers", payload: { answers: (game.currentGameModeData as MUSIC_QUIZ).answers } });
+
+                    // Dedicated logic for update_answers
+                    const recipients = new Set<string>();
+                    recipients.add(game.lobby.host.id);
+                    (game.currentGameModeData as MUSIC_QUIZ).answers.forEach(a => recipients.add(a.playerId));
+
+                    for (const uid of recipients) {
+                        sendToUser(uid, { type: "mq:update_answers", payload: { answers: (game.currentGameModeData as MUSIC_QUIZ).answers } });
+                    }
+
                     broadcast({ type: "mq:update_scoreboard", payload: { Scoreboard: (game.currentGameModeData as MUSIC_QUIZ).Scoreboard } });
                 }
             }
