@@ -212,7 +212,7 @@ export default function GamePage() {
         });
 
         wsRef.current.on('game:not_found', (payload: any) => {
-          // router.push(`/lobby/${id}`);
+          router.push(`/lobby/${id}`);
         });
 
         wsRef.current.on('game:not_authorized', (payload: any) => {
@@ -249,10 +249,12 @@ export default function GamePage() {
 
         wsRef.current.on('game:game_ended', (payload: { game: Game }) => {
           setGameData(payload.game);
+          router.push(`/lobby/${id}`);
         });
 
         wsRef.current.on('game:finished_response_host', (payload: { lobbyId: string }) => {
           wsRef.current?.send({ type: 'lobby:game_finished', payload: { lobbyId: payload.lobbyId } });
+          router.push(`/lobby/${payload.lobbyId}`);
         });
 
         wsRef.current.on('game:finished_response', (payload: { gameId: string }) => {

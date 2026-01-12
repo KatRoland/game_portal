@@ -5,6 +5,7 @@ import { useUser } from '@/contexts/UserContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Karaoke, KaraokeCurrentSong, KaraokeFile, KaraokePlaylist, KaraokeSong, KaraokeSongLyrics, KaraokeSongSegment, Karaoke_Solo } from '@/types';
+import { getAccessToken } from '@/lib/api';
 
 
 interface MusicQuizPlaylist {
@@ -71,7 +72,7 @@ export default function AdminPage() {
     try {
       const response = await fetch('https://gameapi.katroland.hu/musicquiz/playlists', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          'Authorization': `Bearer ${getAccessToken()}`
         }
       });
 
@@ -90,7 +91,7 @@ export default function AdminPage() {
     try {
       const response = await fetch('https://gameapi.katroland.hu/karaoke/playlists', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          'Authorization': `Bearer ${getAccessToken()}`
         }
       });
 
@@ -110,7 +111,7 @@ export default function AdminPage() {
     try {
       const response = await fetch('https://gameapi.katroland.hu/musicquiz/files', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          'Authorization': `Bearer ${getAccessToken()}`
         }
       });
 
@@ -128,7 +129,7 @@ export default function AdminPage() {
   const fetchSOPPlaylists = async () => {
     try {
       const response = await fetch('https://gameapi.katroland.hu/sop/playlists', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+        headers: { 'Authorization': `Bearer ${getAccessToken()}` }
       });
       if (response.ok) {
         const data = await response.json();
@@ -140,7 +141,7 @@ export default function AdminPage() {
   const fetchSOPItems = async (playlistId: number) => {
     try {
       const response = await fetch(`https://gameapi.katroland.hu/sop/playlists/${playlistId}/items`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+        headers: { 'Authorization': `Bearer ${getAccessToken()}` }
       });
       if (response.ok) {
         const data = await response.json();
@@ -154,7 +155,7 @@ export default function AdminPage() {
     try {
       const response = await fetch('https://gameapi.katroland.hu/sop/playlists', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAccessToken()}` },
         body: JSON.stringify({ name: newPlaylistName })
       });
       if (response.ok) { setNewPlaylistName(''); fetchSOPPlaylists(); }
@@ -165,7 +166,7 @@ export default function AdminPage() {
     if (!confirm('Delete this SOP playlist?')) return;
     try {
       const response = await fetch(`https://gameapi.katroland.hu/sop/playlists/${playlistId}`, {
-        method: 'DELETE', headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+        method: 'DELETE', headers: { 'Authorization': `Bearer ${getAccessToken()}` }
       });
       if (response.ok) { setSOPPlaylists(SOPplaylists.filter(p => p.id !== playlistId)); setSOPItems([]); }
     } catch (e) { console.error(e); }
@@ -176,7 +177,7 @@ export default function AdminPage() {
   const removeSOPItem = async (playlistId: number, itemId: number) => {
     try {
       const response = await fetch(`https://gameapi.katroland.hu/sop/playlists/${playlistId}/items/${itemId}`, {
-        method: 'DELETE', headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+        method: 'DELETE', headers: { 'Authorization': `Bearer ${getAccessToken()}` }
       });
       if (response.ok) { setSOPItems(SOPItems.filter(i => i.id !== itemId)); }
     } catch (e) { console.error(e); }
@@ -196,7 +197,7 @@ export default function AdminPage() {
     try {
       const response = await fetch(`https://gameapi.katroland.hu/musicquiz/playlists/${playlistId}/tracks`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          'Authorization': `Bearer ${getAccessToken()}`
         }
       });
 
@@ -224,7 +225,7 @@ export default function AdminPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          'Authorization': `Bearer ${getAccessToken()}`
         },
         body: JSON.stringify({ name: newPlaylistName })
       });
@@ -253,7 +254,7 @@ export default function AdminPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          'Authorization': `Bearer ${getAccessToken()}`
         },
         body: JSON.stringify({ name: newPlaylistName })
       });
@@ -280,7 +281,7 @@ export default function AdminPage() {
       const response = await fetch(`https://gameapi.katroland.hu/musicquiz/playlists/${playlistId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          'Authorization': `Bearer ${getAccessToken()}`
         }
       });
 
@@ -341,7 +342,7 @@ export default function AdminPage() {
       const response = await fetch('https://gameapi.katroland.hu/upload/musicquiz', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          'Authorization': `Bearer ${getAccessToken()}`
         },
         body: formData
       });
@@ -381,7 +382,7 @@ export default function AdminPage() {
       const response = await fetch(`https://gameapi.katroland.hu/musicquiz/playlists/${selectedPlaylist}/tracks/${trackId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          'Authorization': `Bearer ${getAccessToken()}`
         }
       });
 
@@ -402,7 +403,7 @@ export default function AdminPage() {
       const response = await fetch(`https://gameapi.katroland.hu/karaoke/playlists/${selectedPlaylist}/tracks/${trackId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          'Authorization': `Bearer ${getAccessToken()}`
         }
       });
 
@@ -488,7 +489,7 @@ export default function AdminPage() {
       const response = await fetch('https://gameapi.katroland.hu/karaoke/upload', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          'Authorization': `Bearer ${getAccessToken()}`
         },
         body: formData
       });
@@ -901,10 +902,10 @@ function SOPAddItemForm({ playlistId, onAdded }: { playlistId: number, onAdded: 
     try {
       const form = new FormData();
       form.append('image', file);
-      const res = await fetch(`${base}/sop/upload`, { method: 'POST', headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` as any }, body: form, credentials: 'include' });
+      const res = await fetch(`${base}/sop/upload`, { method: 'POST', headers: { 'Authorization': `Bearer ${getAccessToken()}` as any }, body: form, credentials: 'include' });
       if (!res.ok) throw new Error('upload failed');
       const data = await res.json();
-      await fetch(`${base}/sop/playlists/${playlistId}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }, body: JSON.stringify({ title: title.trim(), fileUrl: data.fileUrl }) });
+      await fetch(`${base}/sop/playlists/${playlistId}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getAccessToken()}` }, body: JSON.stringify({ title: title.trim(), fileUrl: data.fileUrl }) });
       setTitle(''); setFile(null); onAdded();
     } finally { setUploading(false); }
   }

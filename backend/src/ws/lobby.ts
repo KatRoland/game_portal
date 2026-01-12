@@ -3,7 +3,7 @@ import type http from "http";
 import jwt from "jsonwebtoken";
 import prisma from "../db/prisma";
 import { Lobby } from "../types/Lobby";
-
+import { gameInit } from "./handlers";
 import { JWT_SECRET } from "../config";
 
 type ClientInfo = {
@@ -229,6 +229,8 @@ class LobbyServer {
           break;
         }
 
+        gameInit(id, lobby.id, lobby, this.clients.get(id)!);
+
         lobby.state = 'started';
         const payload = { lobbyId: lobby.id, startedAt: new Date().toISOString() };
         this.broadcastToLobby(lobby.id, { type: "lobby:started", payload });
@@ -296,6 +298,13 @@ class LobbyServer {
 
   getUserList() {
     return Array.from(this.clients.values()).map((c) => ({ id: c.id, name: c.name ?? null, remote: c.remote }));
+  }
+
+  public endGame(lobbyId: string) {
+    const lobby = this.Lobbies.find(l => l.id === lobbyId);
+    if (!lobby) return;
+    lobby.state = 'waiting';
+    this.broadcastToLobby(lobby.id, { type: "lobby:game_finished", payload: { lobbyId: lobbyId } });
   }
 }
 
