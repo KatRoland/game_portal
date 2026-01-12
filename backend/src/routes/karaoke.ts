@@ -6,6 +6,13 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { KaraokeSong, KaraokeSongLyrics } from "../types/gamemode/KARAOKE";
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegStatic from 'ffmpeg-static';
+
+// Set ffmpeg path from the static package
+if (ffmpegStatic) {
+  ffmpeg.setFfmpegPath(ffmpegStatic);
+}
 
 const router = Router();
 
@@ -315,8 +322,43 @@ router.post("/upload", jwtMiddleware, upload.array('segment', 100), async (req, 
       }
     })
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    // Validate files content with ffmpeg (decoding check)
+    const validFiles: { file: Express.Multer.File, index: number }[] = [];
+
+    // Create a map to track original indices
+    const fileMap = files.map((file, index) => ({ file, index }));
+
+    for (const { file, index } of fileMap) {
+      try {
+        await new Promise((resolve, reject) => {
+          // Attempt to decode a bit of the file to verify it's valid audio
+          ffmpeg(file.path)
+            .format('null')
+            .duration(1) // Check first second to be fast
+            .on('end', resolve)
+            .on('error', reject)
+            .save(process.platform === 'win32' ? 'NUL' : '/dev/null');
+        });
+        validFiles.push({ file, index });
+      } catch (err) {
+        console.error(`Invalid media file ${file.originalname}:`, err);
+        // Delete invalid file
+        if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+      }
+    }
+
+    if (validFiles.length === 0) {
+      // If all failed, clean up any remaining (though loop creates them one by one, good practice)
+      // logic handled in loop above
+      // also need to cleanup song entry if no files valid? Or just fail request
+      await prisma.karaokeSong.delete({ where: { id: song.id } });
+      return res.status(400).json({ error: "All uploaded files failed validation (not valid audio files)" });
+    }
+
+    // Only process valid files
+    for (const { file, index } of validFiles) {
+      // Restore original index logic
+      const i = index;
 
 
       const segmentList = JSON.parse(req.body.segmentData) as any[];
