@@ -140,12 +140,16 @@ class LobbyServer {
         const lobbyId = typeof parsed.payload?.lobbyId === "string" ? parsed.payload.lobbyId : null;
         const lobby = this.Lobbies.find(l => l.id === lobbyId);
         const clientInfo = this.clients.get(id);
+        console.log(`lobby:join ${lobbyId} ${clientInfo?.user?.id}`)
         if (lobby && clientInfo && clientInfo.user) {
+          console.log("step 1")
           if (lobby.players.find(p => p.id === clientInfo.user!.id)) {
+            console.log("step 2")
             if (lobby.state === 'started') {
               this.send(clientInfo.ws, { type: "lobby:join:success:started", payload: { lobbyId: lobbyId } });
               return;
             }
+            console.log(`lobby:join:success ${lobbyId} ${clientInfo.user.id}`)
             this.send(clientInfo.ws, { type: "lobby:join:success", payload: lobby });
             break;
           }

@@ -5,7 +5,8 @@ import { useRouter, useParams } from 'next/navigation'
 import { createWS, getWSClient, WSClient } from '@/lib/ws'
 import { useUser } from '@/contexts/UserContext'
 import { User, Lobby, Game, NextGameMode, GameMode } from '@/types'
-import { getUserAvatar } from '@/lib/api'
+import { getUserAvatar, getAccessToken } from '@/lib/api'
+
 
 export default function LobbyRoomPage() {
   const { id } = useParams() as { id: string }
@@ -27,7 +28,7 @@ export default function LobbyRoomPage() {
         return
       }
 
-      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+      const token = typeof window !== 'undefined' ? getAccessToken() : null
       if (!token) {
         router.push('/auth/login')
         return
@@ -35,10 +36,9 @@ export default function LobbyRoomPage() {
 
       wsRef.current = createWS(token, 'lobby')
 
-      wsRef.current.onStatus((s) => {
-        if (s === 'connected') {
-          try { wsRef.current?.send({ type: 'lobby:join', payload: { lobbyId: id } }) } catch (e) { console.error(e) }
-        }
+      wsRef.current.on('lobby:welcome', (payload: { lobbyId: string }) => {
+        console.log('Lobby welcome', payload);
+        try { wsRef.current?.send({ type: 'lobby:join', payload: { lobbyId: id } }) } catch (e) { console.error(e) }
       })
 
       wsRef.current.on('lobby:join:success:started', (payload: { lobbyId: string }) => {
@@ -183,7 +183,7 @@ export default function LobbyRoomPage() {
         })
     } else if (selected.type == GameMode.SMASH_OR_PASS_PLAYLIST) {
       fetch('https://gameapi.katroland.hu/sop/playlists', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('accessToken')}` }
+        headers: { 'Authorization': `Bearer ${getAccessToken()}` }
       })
         .then(res => res.json())
         .then(data => setPlaylists(data.playlists || []))

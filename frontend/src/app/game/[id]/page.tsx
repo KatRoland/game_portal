@@ -14,8 +14,7 @@ import KaraokeSolo from '@/components/games/karaokesolo';
 import KaraokeDuett from '@/components/games/karaokeduett';
 import SmashOrPass from '@/components/games/SmashOrPass';
 import SmashOrPassPlaylist from '@/components/games/SmashOrPassPlaylist';
-
-
+import { getAccessToken } from '@/lib/api'
 
 export default function GamePage() {
   const router = useRouter()
@@ -188,7 +187,7 @@ export default function GamePage() {
           return
         }
 
-        const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null
+        const token = typeof window !== 'undefined' ? getAccessToken() : null
         if (!token) {
           router.push('/auth/login')
           return
@@ -196,17 +195,28 @@ export default function GamePage() {
 
         wsRef.current = createWS(token, 'game')
 
-        wsRef.current.onStatus((s) => {
-          if (s === 'connected') {
-            try { wsRef.current?.send({ type: 'game:load', payload: { gameId: pid } }) } catch (e) { console.error(e) }
-          }
-        })
+        // wsRef.current.onStatus((s) => {
+        //   if (s === 'connected') {
+        //     try { wsRef.current?.send({ type: 'game:load', payload: { gameId: pid } }) } catch (e) { console.error(e) }
+        //   }
+        // })
       }
+
 
       const declareGAMEListeners = () => {
         if (!wsRef.current) return;
+
+
+        wsRef.current.on('game:welcome', (payload: any) => {
+          try { wsRef.current?.send({ type: 'game:load', payload: { gameId: pid } }) } catch (e) { console.error(e) }
+        });
+
         wsRef.current.on('game:not_found', (payload: any) => {
-          router.push(`/lobby/${id}`);
+          // router.push(`/lobby/${id}`);
+        });
+
+        wsRef.current.on('game:not_authorized', (payload: any) => {
+          console.error(payload.message);
         });
 
         wsRef.current.on('game:load:response', (payload: { game: any }) => {

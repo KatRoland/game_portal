@@ -20,6 +20,7 @@ export async function sessionMiddleware(req: Request, res: Response, next: NextF
   try {
     const cookies = parseCookies(req.headers.cookie ?? null);
     const sid = cookies["sid"];
+    console.log(`${req.method} ${req.url} ${sid}`)
     if (!sid) return next();
 
     const session = await prisma.session.findUnique({ where: { token: sid }, include: { user: true } });
