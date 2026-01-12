@@ -128,7 +128,7 @@ class GameServer {
       if (!clientInfo) return;
       const clientUser = clientInfo.user ?? null;
       (parsed as any).clientUser = clientUser;
-      handleMQMessages(clientUser, parsed, (game as Game), (msg) => this.broadcastToLobby(parsed.payload.gameId, msg), (msg) => this.sendToPlayer(gameId, clientInfo.id, msg));
+      handleMQMessages(clientUser, parsed, (game as Game), (msg) => this.broadcastToLobby(parsed.payload.gameId, msg), (msg) => this.sendToPlayer(gameId, clientInfo.id, msg), (uid: string, msg: any) => this.sendToUser(gameId, uid, msg));
       return;
     }
 
@@ -644,6 +644,21 @@ class GameServer {
           c.ws.send(text);
         } catch {
           console.error("failed to send to user");
+        }
+      }
+    }
+  }
+
+  sendToUser(lobbyId: string, userId: string, msg: unknown) {
+    const lobby = this.games.find(l => l.id === lobbyId);
+    if (!lobby) return;
+    const text = JSON.stringify(msg);
+    for (const c of this.clients.values()) {
+      if (c.user?.id == userId) {
+        try {
+          c.ws.send(text);
+        } catch (err) {
+          console.error("Failed to send to user", userId, err);
         }
       }
     }
