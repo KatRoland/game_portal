@@ -15,12 +15,12 @@ router.get('/playlists', jwtMiddleware, async (_req, res) => {
   } catch (e) { res.status(500).json({ error: 'failed' }) }
 });
 
-router.get('/items', jwtMiddleware, async (req, res) => {
+router.get('/pitems/:id', jwtMiddleware, async (req, res) => {
   try {
     const id = Number(req.params.id);
     const items = await prisma.sopPlaylistItem.findMany({ where: { playlistId: id }, orderBy: { position: 'asc' } });
     res.json({ items });
-  } catch (e) { res.status(500).json({ error: 'failed' }) }
+  } catch (e) { console.log(e); res.status(500).json({ error: 'failed' }) }
 });
 
 router.get('/items/:id', jwtMiddleware, async (req, res) => {

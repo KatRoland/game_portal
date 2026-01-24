@@ -140,7 +140,7 @@ export default function AdminPage() {
 
   const fetchSOPItems = async (playlistId: number) => {
     try {
-      const response = await fetch(`https://gameapi.katroland.hu/sop/playlists/${playlistId}/items`, {
+      const response = await fetch(`https://gameapi.katroland.hu/sop/pitems/${playlistId}`, {
         headers: { 'Authorization': `Bearer ${getAccessToken()}` }
       });
       if (response.ok) {

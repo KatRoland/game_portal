@@ -21,6 +21,8 @@ export async function jwtMiddleware(req: Request, res: Response, next: NextFunct
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return next();
 
+    console.log("jwt middleware", user);
+
     (req as any).user = user;
     res.locals.user = user;
     return next();
