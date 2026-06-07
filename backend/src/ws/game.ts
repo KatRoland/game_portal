@@ -95,84 +95,39 @@ class GameServer {
     const user = this.clients.get(id)?.user;
     if (!user) return;
 
-    if (parsed.type.startsWith("qa:")) {
-      const gameId = typeof parsed.payload?.gameId === "string" ? parsed.payload.gameId : null;
-      const game = this.games.find(g => g.id === gameId);
-      const clientInfo = this.clients.get(id);
-      if (!clientInfo) return;
-      const clientUser = clientInfo.user ?? null;
-      (parsed as any).clientUser = clientUser;
-      handleQAMessages(clientUser, parsed, (game as Game), (msg) => this.broadcastToLobby(parsed.payload.gameId, msg), (msg) => this.send.bind(this, this.clients.get(id)!.ws, msg));
-      console.log("new GameData: ", game);
-      return;
+    const prefix = parsed.type.split(":")[0];
+    const handlers: Record<string, Function> = {
+      qa: handleQAMessages,
+      btn: handleBTNMessage,
+      mq: handleMQMessages,
+      ks: handleKSMessages,
+      kd: handleKDMessages,
+      sop: handleSOPMessages,
+      soppl: handleSOPPLMessages,
     };
 
-    if (parsed.type.startsWith("btn:")) {
+    if (handlers[prefix]) {
       const gameId = typeof parsed.payload?.gameId === "string" ? parsed.payload.gameId : null;
-      const game = this.games.find(g => g.id === gameId);
+      const game = gameId ? this.games.find(g => g.id === gameId) : null;
       const clientInfo = this.clients.get(id);
-      console.log("btn message received:", parsed);
-      if (!clientInfo) return;
-      console.log("client info exists");
-      const clientUser = clientInfo.user ?? null;
-      (parsed as any).clientUser = clientUser;
-      handleBTNMessage(clientUser, parsed, (game as Game), (msg) => this.broadcastToLobby(parsed.payload.gameId, msg), (msg) => this.send.bind(this, this.clients.get(id)!.ws, msg));
-      console.log("new GameData: ", game);
-      return;
-    }
 
-    if (parsed.type.startsWith("mq:")) {
-      const gameId = typeof parsed.payload?.gameId === "string" ? parsed.payload.gameId : null;
-      const game = this.games.find(g => g.id === gameId);
-      const clientInfo = this.clients.get(id);
-      if (!clientInfo) return;
-      const clientUser = clientInfo.user ?? null;
-      (parsed as any).clientUser = clientUser;
-      handleMQMessages(clientUser, parsed, (game as Game), (msg) => this.broadcastToLobby(parsed.payload.gameId, msg), (msg) => this.sendToPlayer(gameId, clientInfo.id, msg), (uid: string, msg: any) => this.sendToUser(gameId, uid, msg));
-      return;
-    }
+      if (!clientInfo || !game) return;
 
-    if (parsed.type.startsWith("ks:")) {
-      const gameId = typeof parsed.payload?.gameId === "string" ? parsed.payload.gameId : null;
-      const game = this.games.find(g => g.id === gameId);
-      const clientInfo = this.clients.get(id);
-      if (!clientInfo) return;
       const clientUser = clientInfo.user ?? null;
-      (parsed as any).clientUser = clientUser;
-      handleKSMessages(clientUser, parsed, (game as Game), (msg) => this.broadcastToLobby(parsed.payload.gameId, msg), (msg) => this.sendToPlayer(gameId, clientInfo.id, msg));
-      return;
-    }
+      parsed.clientUser = clientUser;
 
-    if (parsed.type.startsWith("kd:")) {
-      const gameId = typeof parsed.payload?.gameId === "string" ? parsed.payload.gameId : null;
-      const game = this.games.find(g => g.id === gameId);
-      const clientInfo = this.clients.get(id);
-      if (!clientInfo) return;
-      const clientUser = clientInfo.user ?? null;
-      (parsed as any).clientUser = clientUser;
-      handleKDMessages(clientUser, parsed, (game as Game), (msg) => this.broadcastToLobby(parsed.payload.gameId, msg), (msg) => this.sendToPlayer(gameId, clientInfo.id, msg));
-      return;
-    }
-
-    if (parsed.type.startsWith("sop:")) {
-      const gameId = typeof parsed.payload?.gameId === "string" ? parsed.payload.gameId : null;
-      const game = this.games.find(g => g.id === gameId);
-      const clientInfo = this.clients.get(id);
-      if (!clientInfo) return;
-      const clientUser = clientInfo.user ?? null;
-      (parsed as any).clientUser = clientUser;
-      handleSOPMessages(clientUser, parsed, (game as Game), (msg) => this.broadcastToLobby(parsed.payload.gameId, msg), (msg) => this.sendToPlayer(gameId, clientInfo.id, msg));
-      return;
-    }
-
-    if (parsed.type.startsWith("soppl:")) {
-      const gameId = typeof parsed.payload?.gameId === "string" ? parsed.payload.gameId : null;
-      const game = this.games.find(g => g.id === gameId);
-      const clientInfo = this.clients.get(id);
-      if (!clientInfo) return;
-      const clientUser = clientInfo.user ?? null;
-      (parsed as any).clientUser = clientUser;
-      handleSOPPLMessages(clientUser, parsed, (game as Game), (msg) => this.broadcastToLobby(parsed.payload.gameId, msg), (msg) => this.sendToPlayer(gameId, clientInfo.id, msg));
+      try {
+        handlers[prefix](
+          clientUser,
+          parsed,
+          game,
+          (msg: any) => this.broadcastToLobby(gameId!, msg),
+          (msg: any) => this.send(clientInfo.ws, msg),
+          (uid: string, msg: any) => this.sendToUser(gameId!, uid, msg)
+        );
+      } catch (error) {
+        console.error(`[Router Error] Handler for '${prefix}' crashed:`, error);
+      }
       return;
     }
 

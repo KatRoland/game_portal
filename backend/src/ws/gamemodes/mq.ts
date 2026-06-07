@@ -108,6 +108,7 @@ export async function handleMQMessages(user: any, data: any, game: Game, broadca
         }
 
         case "mq:accept_answer": {
+            if (user.id !== game.lobby.host.id) return;
             const playerId = typeof data.payload?.playerId === "string" ? data.payload.playerId : "";
             if (playerId) {
                 const answer = (game.currentGameModeData as MUSIC_QUIZ).answers.find(a => a.playerId === playerId);
@@ -133,6 +134,7 @@ export async function handleMQMessages(user: any, data: any, game: Game, broadca
         }
 
         case "mq:decline_answer": {
+            if (user.id !== game.lobby.host.id) return;
             const playerId = typeof data.payload?.playerId === "string" ? data.payload.playerId : "";
             if (playerId) {
                 const answer = (game.currentGameModeData as MUSIC_QUIZ).answers.find(a => a.playerId === playerId);
