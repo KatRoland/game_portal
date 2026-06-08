@@ -1,160 +1,168 @@
-
-import { MUSIC_QUIZ, Answer } from "../../types/gamemode/MUSIC_QUIZ";
-import { Game } from "../../types/Game";
+import { IGameModeHandler, GameModeContext } from "../../types/GameModeHandler";
+import { MUSIC_QUIZ } from "../../types/gamemode/MUSIC_QUIZ";
 import prisma from "../../db/prisma";
 
-export async function handleMQMessages(user: any, data: any, game: Game, broadcast: (msg: any) => void, send: (msg: any) => void, sendToUser: (userId: string, msg: any) => void) {
-    console.log('Handling MQ messages', data);
-    console.log('Current game state', game);
-    console.log("user:", user);
+export class MusicQuizHandler implements IGameModeHandler {
 
-    switch (data.type) {
-        case "mq:get_current_song": {
-            console.log(game)
-            console.log("\n\n\nget the song\n\n\n")
+    // Privát helper a pontozási hálózati frissítésekhez
+    private sendAnswerUpdates(ctx: GameModeContext, mqData: MUSIC_QUIZ) {
+        const recipients = new Set<string>();
+        recipients.add(ctx.game.lobby.host.id);
+        mqData.answers.forEach(a => recipients.add(a.playerId));
 
-            const replayEntry = (game.currentGameModeData as MUSIC_QUIZ).replays.find(r => r.playerId === user.id);
-            if (replayEntry && replayEntry.count >= 2) {
-                send({ type: 'mq:replay_limit_reached', payload: { playerId: user.id } })
-            }
-
-            const song = (game.currentGameModeData as MUSIC_QUIZ).currentTrack
-            const url = `https://gameapi.katroland.hu/musicquiz/tracks/${song.fileUrl.replace('music_quiz/', '')}`
-            console.log(`\n\nURL:${url}\n\n`)
-            send({ type: "mq:current_song:response", payload: { fileUrl: url } });
-            break;
+        for (const uid of recipients) {
+            ctx.sendToUser(uid, { type: "mq:update_answers", payload: { answers: mqData.answers } });
         }
 
-        case "mq:next_song": {
-            if (user.id != game.lobby.host.id) return;
-            console.log(game.currentGameModeData)
-            game.currentGameModeData.currentTrackIndex += 1;
+        ctx.broadcast({ type: "mq:update_scoreboard", payload: { Scoreboard: mqData.Scoreboard } });
+    }
 
+    // Az interfész által megkövetelt fő metódus
+    async handleMessage(ctx: GameModeContext): Promise<void> {
+        const mqData = ctx.game.currentGameModeData as MUSIC_QUIZ | undefined;
 
-            if (game.currentGameModeData.currentTrackIndex >= game.currentGameModeData.tracks.length) {
-                send({ type: 'mq:no_more_songs', payload: { gameId: game.id } })
-                return
-            };
-
-            const nextTrack = await prisma.musicQuizTrack.findFirst({
-                where: {
-                    id: game.currentGameModeData.tracks[game.currentGameModeData.currentTrackIndex].id
-                }
-            });
-            if (!nextTrack) return;
-            (game.currentGameModeData as MUSIC_QUIZ).currentTrack = nextTrack
-            game.currentGameModeData.answers = []
-            game.currentGameModeData.replays = []
-            const url = `https://gameapi.katroland.hu/musicquiz/tracks/${nextTrack.fileUrl.replace('music_quiz/', '')}`
-            const paylaod = {
-                currentTrackIndex: game.currentGameModeData.currentTrackIndex,
-                currentSong: url,
-                answers: [],
-                replays: []
-            }
-            broadcast({ type: 'mq:next_song_started', payload: paylaod })
-            break;
+        // Golyóálló null-guard az in-memory adatokra
+        if (!mqData) {
+            console.error(`[MQ Handler] State error: currentGameModeData is missing for game ${ctx.game.id}`);
+            return;
         }
 
-        case 'mq:replay_song': {
-            const playerId = user.id;
-            if (playerId) {
-                const entry = (game.currentGameModeData as MUSIC_QUIZ).replays.find(r => r.playerId === playerId);
-                if (entry) entry.count += 1;
-                else (game.currentGameModeData as MUSIC_QUIZ).replays.push({ playerId, count: 1 });
-                const replayEntry = (game.currentGameModeData as MUSIC_QUIZ).replays.find(r => r.playerId === playerId);
-                if (replayEntry && replayEntry.count >= 3) {
-                    send({ type: 'mq:replay_limit_reached', payload: { playerId: playerId } })
-                }
-            }
-            break;
-        }
+        try {
+            // A switch most már a ctx.dataType-ra (a data.type-ra) épít
+            switch (ctx.dataType) {
 
-        case "mq:start": {
-            const gameId = data.payload.gameId
-
-            broadcast({ type: 'mq:started', payload: { gameId: gameId } })
-            break;
-        }
-
-        case "mq:submit_answer": {
-            const playerId = typeof user?.id === "string" ? user.id : "";
-            const playerName = typeof user?.username === "string" ? user.username : "Anonymous";
-            const answer = typeof data.payload?.answer === "string" ? data.payload.answer : null;
-            if (playerId && playerName && answer) {
-                if ((game.currentGameModeData as MUSIC_QUIZ).answers.find(a => a.playerId === playerId)) {
-                    send({ type: "mq:already_answered", payload: { playerId: playerId } })
-                    console.log(`Player ${playerId} has already answered.`);
-                    return;
-                }
-                (game.currentGameModeData as MUSIC_QUIZ).answers.push({ playerId, playerName, answer, state: "pending" });
-                console.log("Updated answers:", (game.currentGameModeData as MUSIC_QUIZ).answers);
-                const players = game.lobby.players;
-                const playerswhoanswered = players.filter(p => (game.currentGameModeData as MUSIC_QUIZ).answers.find(a => a.playerId === p.id));
-
-                const recipients = new Set<string>();
-                recipients.add(game.lobby.host.id);
-                playerswhoanswered.forEach(p => recipients.add(p.id));
-
-                for (const uid of recipients) {
-                    sendToUser(uid, { type: "mq:update_answers", payload: { answers: (game.currentGameModeData as MUSIC_QUIZ).answers } });
-                }
-
-                if (playerswhoanswered.length === players.length) {
-                    broadcast({ type: "mq:update_answers", payload: { answers: (game.currentGameModeData as MUSIC_QUIZ).answers } });
-                }
-            }
-            break;
-        }
-
-        case "mq:accept_answer": {
-            if (user.id !== game.lobby.host.id) return;
-            const playerId = typeof data.payload?.playerId === "string" ? data.payload.playerId : "";
-            if (playerId) {
-                const answer = (game.currentGameModeData as MUSIC_QUIZ).answers.find(a => a.playerId === playerId);
-                if (answer) {
-                    if (answer.state == "correct") return;
-                    answer.state = "correct";
-                    const entry = (game.currentGameModeData as MUSIC_QUIZ).Scoreboard.scores.find(s => s.playerId === playerId);
-                    if (entry) entry.score += 1;
-
-                    const recipients = new Set<string>();
-                    recipients.add(game.lobby.host.id);
-                    (game.currentGameModeData as MUSIC_QUIZ).answers.forEach(a => recipients.add(a.playerId));
-
-                    for (const uid of recipients) {
-                        sendToUser(uid, { type: "mq:update_answers", payload: { answers: (game.currentGameModeData as MUSIC_QUIZ).answers } });
+                case "mq:get_current_song": {
+                    const replayEntry = mqData.replays.find(r => r.playerId === ctx.userId);
+                    if (replayEntry && replayEntry.count >= 2) {
+                        return ctx.send({ type: 'mq:replay_limit_reached', payload: { playerId: ctx.userId } });
                     }
 
-                    broadcast({ type: "mq:update_scoreboard", payload: { Scoreboard: (game.currentGameModeData as MUSIC_QUIZ).Scoreboard } });
-                }
-            }
-            break;
-        }
-
-        case "mq:decline_answer": {
-            if (user.id !== game.lobby.host.id) return;
-            const playerId = typeof data.payload?.playerId === "string" ? data.payload.playerId : "";
-            if (playerId) {
-                const answer = (game.currentGameModeData as MUSIC_QUIZ).answers.find(a => a.playerId === playerId);
-                if (answer) {
-                    if (answer.state == "incorrect") return;
-                    const entry = (game.currentGameModeData as MUSIC_QUIZ).Scoreboard.scores.find(s => s.playerId === playerId);
-                    if (entry) entry.score -= 1;
-                    answer.state = "incorrect";
-
-                    const recipients = new Set<string>();
-                    recipients.add(game.lobby.host.id);
-                    (game.currentGameModeData as MUSIC_QUIZ).answers.forEach(a => recipients.add(a.playerId));
-
-                    for (const uid of recipients) {
-                        sendToUser(uid, { type: "mq:update_answers", payload: { answers: (game.currentGameModeData as MUSIC_QUIZ).answers } });
+                    const song = mqData.currentTrack;
+                    if (!song || !song.fileUrl) {
+                        return ctx.send({ type: "mq:error", message: "no_track_loaded" });
                     }
 
-                    broadcast({ type: "mq:update_scoreboard", payload: { Scoreboard: (game.currentGameModeData as MUSIC_QUIZ).Scoreboard } });
+                    const url = `https://gameapi.katroland.hu/musicquiz/tracks/${song.fileUrl.replace('music_quiz/', '')}`;
+                    ctx.send({ type: "mq:current_song:response", payload: { fileUrl: url } });
+                    break;
+                }
+
+                case "mq:next_song": {
+                    if (ctx.userId !== ctx.game.lobby.host.id) return;
+
+                    mqData.currentTrackIndex += 1;
+                    if (mqData.currentTrackIndex >= mqData.tracks.length) {
+                        return ctx.send({ type: 'mq:no_more_songs', payload: { gameId: ctx.game.id } });
+                    }
+
+                    const nextTrack = await prisma.musicQuizTrack.findFirst({
+                        where: { id: mqData.tracks[mqData.currentTrackIndex].id }
+                    });
+
+                    if (!nextTrack) {
+                        return ctx.send({ type: "mq:error", message: "track_database_error" });
+                    }
+
+                    mqData.currentTrack = nextTrack;
+                    mqData.answers = [];
+                    mqData.replays = [];
+
+                    const url = `https://gameapi.katroland.hu/musicquiz/tracks/${nextTrack.fileUrl.replace('music_quiz/', '')}`;
+
+                    ctx.broadcast({
+                        type: 'mq:next_song_started',
+                        payload: {
+                            currentTrackIndex: mqData.currentTrackIndex,
+                            currentSong: url,
+                            answers: [],
+                            replays: []
+                        }
+                    });
+                    break;
+                }
+
+                case 'mq:replay_song': {
+                    const entry = mqData.replays.find(r => r.playerId === ctx.userId);
+                    if (entry) {
+                        entry.count += 1;
+                    } else {
+                        mqData.replays.push({ playerId: ctx.userId, count: 1 });
+                    }
+
+                    if (entry && entry.count >= 3) {
+                        ctx.send({ type: 'mq:replay_limit_reached', payload: { playerId: ctx.userId } });
+                    }
+                    break;
+                }
+
+                case "mq:start": {
+                    ctx.broadcast({ type: 'mq:started', payload: { gameId: ctx.payload?.gameId } });
+                    break;
+                }
+
+                case "mq:submit_answer": {
+                    const answer = typeof ctx.payload?.answer === "string" ? ctx.payload.answer : null;
+                    if (!answer) return;
+
+                    if (mqData.answers.some(a => a.playerId === ctx.userId)) {
+                        return ctx.send({ type: "mq:already_answered", payload: { playerId: ctx.userId } });
+                    }
+
+                    const playerName = ctx.user.username ?? "Anonymous";
+                    mqData.answers.push({ playerId: ctx.userId, playerName, answer, state: "pending" });
+
+                    const players = ctx.game.lobby.players;
+                    const playersWhoAnswered = players.filter(p => mqData.answers.some(a => a.playerId === p.id));
+
+                    const recipients = new Set<string>();
+                    recipients.add(ctx.game.lobby.host.id);
+                    playersWhoAnswered.forEach(p => recipients.add(p.id));
+
+                    for (const uid of recipients) {
+                        ctx.sendToUser(uid, { type: "mq:update_answers", payload: { answers: mqData.answers } });
+                    }
+
+                    if (playersWhoAnswered.length === players.length) {
+                        ctx.broadcast({ type: "mq:update_answers", payload: { answers: mqData.answers } });
+                    }
+                    break;
+                }
+
+                case "mq:accept_answer": {
+                    if (ctx.userId !== ctx.game.lobby.host.id) return;
+                    const targetPlayerId = typeof ctx.payload?.playerId === "string" ? ctx.payload.playerId : "";
+                    if (!targetPlayerId) return;
+
+                    const answer = mqData.answers.find(a => a.playerId === targetPlayerId);
+                    if (answer && answer.state !== "correct") {
+                        answer.state = "correct";
+                        const scoreEntry = mqData.Scoreboard.scores.find(s => s.playerId === targetPlayerId);
+                        if (scoreEntry) scoreEntry.score += 1;
+
+                        this.sendAnswerUpdates(ctx, mqData);
+                    }
+                    break;
+                }
+
+                case "mq:decline_answer": {
+                    if (ctx.userId !== ctx.game.lobby.host.id) return;
+                    const targetPlayerId = typeof ctx.payload?.playerId === "string" ? ctx.payload.playerId : "";
+                    if (!targetPlayerId) return;
+
+                    const answer = mqData.answers.find(a => a.playerId === targetPlayerId);
+                    if (answer && answer.state !== "incorrect") {
+                        const scoreEntry = mqData.Scoreboard.scores.find(s => s.playerId === targetPlayerId);
+                        if (scoreEntry) scoreEntry.score -= 1;
+                        answer.state = "incorrect";
+
+                        this.sendAnswerUpdates(ctx, mqData);
+                    }
+                    break;
                 }
             }
-            break;
+        } catch (error) {
+            console.error(`[Fatal MQ Class Error] Crash prevented in case ${ctx.dataType}:`, error);
+            ctx.send({ type: "mq:error", message: "internal_server_error_in_module" });
         }
     }
 }

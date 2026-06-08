@@ -6,12 +6,8 @@ import { Lobby } from "../types/Lobby";
 import { Game } from "../types/Game";
 import { GameMode } from "../types/GameMode";
 import { QA } from "../types/gamemode/QA";
-import { handleQAMessages } from "./gamemodes/qa";
-import { handleBTNMessage } from "./gamemodes/btnclicker";
-import { handleMQMessages } from "./gamemodes/mq";
-import { handleKSMessages } from "./gamemodes/ks";
-import { handleSOPMessages } from "./gamemodes/sop";
-import { handleSOPPLMessages } from "./gamemodes/sop_playlist";
+import { IGameModeHandler, GameModeContext } from "../types/GameModeHandler";
+import { MusicQuizHandler } from "./gamemodes/mq";
 import { Scoreboard } from "../types/Score";
 import { NextGameMode } from "../types/NextGameMode";
 import { MUSIC_QUIZ } from "../types/gamemode/MUSIC_QUIZ";
@@ -23,7 +19,6 @@ import {
   Karaoke_Duett,
   KaraokePlayerSegment
 } from "../types/gamemode/KARAOKE";
-import { handleKDMessages } from "./gamemodes/kd";
 
 import { createGameModeData } from "../factories/GameModeData";
 
@@ -66,14 +61,20 @@ function shuffleArray<T>(array: T[]): T[] {
   return arr;
 }
 
-const COMPONENT_HANDLERS: Record<string, Function> = {
-  qa: handleQAMessages,
-  btn: handleBTNMessage,
-  mq: handleMQMessages,
-  ks: handleKSMessages,
-  kd: handleKDMessages,
-  sop: handleSOPMessages,
-  soppl: handleSOPPLMessages,
+// const COMPONENT_HANDLERS: Record<string, Function> = {
+//   qa: handleQAMessages,
+//   btn: handleBTNMessage,
+//   mq: handleMQMessages,
+//   ks: handleKSMessages,
+//   kd: handleKDMessages,
+//   sop: handleSOPMessages,
+//   soppl: handleSOPPLMessages,
+// };
+
+const COMPONENT_HANDLERS: Record<string, IGameModeHandler> = {
+  mq: new MusicQuizHandler(),
+  // qa: new QAHandler(),
+  // btn: new ButtonClickerHandler(),
 };
 
 const CoreCommands = new Map<string, ICommand>();
@@ -324,31 +325,31 @@ export class GameServer {
     const prefix = parsed.type.split(":")[0];
     const moduleHandler = COMPONENT_HANDLERS[prefix];
 
-    // 1. UTALÁS A JÁTÉKMÓD SPECIFIKUS HANDLEREKRE (qa:, mq:, sop:)
     if (moduleHandler) {
       const gameId = typeof parsed.payload?.gameId === "string" ? parsed.payload.gameId : null;
-      const game = gameId ? this.games.find(g => g.id === gameId) : null;
+      const game = gameId ? (this.games.find(g => g.id === gameId) ?? null) : null;
 
       if (!game || (game as any).state === "initializing") return;
 
-      parsed.clientUser = clientInfo.user ?? null;
+      const gameModeCtx: GameModeContext = {
+        userId: user.id,
+        user: user,
+        game: game,
+        payload: parsed.payload || {},
+        dataType: parsed.type,
+        broadcast: (msg: any) => this.broadcastToLobby(gameId!, msg),
+        send: (msg: any) => this.send(clientInfo.ws, msg),
+        sendToUser: (uid: string, msg: any) => this.sendToUser(gameId!, uid, msg)
+      };
 
       try {
-        moduleHandler(
-          parsed.clientUser,
-          parsed,
-          game,
-          (msg: any) => this.broadcastToLobby(gameId!, msg),
-          (msg: any) => this.send(clientInfo.ws, msg),
-          (uid: string, msg: any) => this.sendToUser(gameId!, uid, msg)
-        );
+        await moduleHandler.handleMessage(gameModeCtx);
       } catch (error) {
-        console.error(`[Router Error] Module handler for '${prefix}' crashed:`, error);
+        console.error(`[Router Error] Handler for '${prefix}' crashed:`, error);
       }
       return;
     }
 
-    // 2. UTALÁS A ZÁRT CORE PARANCSOKRA (game:init, game:load, stb.)
     const command = CoreCommands.get(parsed.type);
     if (!command) return;
 
@@ -365,7 +366,6 @@ export class GameServer {
       return;
     }
 
-    // Kontextus injektálása és golyóálló végrehajtás centralizált try/catch-ben
     const ctx: CommandContext = {
       id,
       gameId,

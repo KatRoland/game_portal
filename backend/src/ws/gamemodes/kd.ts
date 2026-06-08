@@ -1,242 +1,239 @@
-
-import { KaraokeSong, KaraokeSongSegment, KaraokeSongLyrics, KaraokePlaylist, Karaoke, KaraokeCurrentSong, KaraokeFile, Karaoke_Duett } from "../../types/gamemode/KARAOKE"
+import { IGameModeHandler, GameModeContext } from "../../types/GameModeHandler";
+import { Karaoke_Duett, KaraokeFile } from "../../types/gamemode/KARAOKE";
 import { Game } from "../../types/Game";
 import prisma from "../../db/prisma";
-const ffmpegStatic = require('ffmpeg-static');
-const ffmpeg = require('fluent-ffmpeg');
+import ffmpegStatic from 'ffmpeg-static';
+import ffmpeg from 'fluent-ffmpeg';
 
-async function finalizeKaraoke(game: Game) {
-    const inputsCount = game.currentGameModeData.outputs.length;
+export class KaraokeDuettHandler implements IGameModeHandler {
 
-    const inputVolumes = game.currentGameModeData.outputs
-        .map((_: any, idx: number) => `[${idx}:a]volume=1[a${idx}]`)
-        .join(';');
+    // --- Shared Helper: Discord Voice State Management ---
+    private async setDiscordDeafenStatus(userIds: number[], deafen: boolean) {
+        if (!userIds.length) return;
+        try {
+            const users = await prisma.user.findMany({
+                where: { id: { in: userIds } },
+                select: { discordId: true }
+            });
 
-    const inputLabels = game.currentGameModeData.outputs
-        .map((_: any, idx: number) => `[a${idx}]`)
-        .join('');
+            const discordIds = users.map(u => u.discordId).filter(Boolean);
+            if (!discordIds.length) return;
 
-    const filterComplex = `${inputVolumes};${inputLabels}concat=n=${inputsCount}:v=0:a=1[out]`;
-
-    const output = `${Date.now()}-final.mp3`;
-    return new Promise((resolve, reject) => {
-        const cmd = ffmpeg();
-        game.currentGameModeData.outputs.forEach((out: KaraokeFile) => {
-            cmd.input(`uploads/karaoke/output/${out.file}`);
-        });
-
-        cmd
-            .complexFilter(filterComplex, ['out'])
-            .saveToFile(`uploads/karaoke/output/${output}`)
-            .on('end', () => resolve(output))
-            .on('error', (err: any) => reject(err));
-    });
-}
-
-
-export async function handleKDMessages(user: any, data: any, game: Game, broadcast: (msg: any) => void, send: (msg: any) => void) {
-    // console.log('Handling KD messages', data);
-    // console.log('Current game state', game);
-    // console.log("user:", user); 
-
-    switch (data.type) {
-        case "kd:record_uploaded": {
-
-            prisma.user.findUnique({
-                where: {
-                    id: Number(user.id)
-                },
-                select: {
-                    discordId: true
-                }
-            }).then(async (res: any) => {
-                console.log(res)
-                await fetch(`${process.env.DISCORD_API_URL}/undeafen`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        userIds: [res.discordId],
-                        guildId: process.env.DISCORD_GUILD_ID
-                    })
+            const endpoint = deafen ? '/deafen' : '/undeafen';
+            await fetch(`${process.env.DISCORD_API_URL}${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userIds: discordIds,
+                    guildId: process.env.DISCORD_GUILD_ID
                 })
-                    .then((res: any) => {
-                        console.log(res)
-                    })
-                    .catch((err: any) => {
-                        console.error(err);
-                    })
-            })
+            });
+        } catch (err) {
+            console.error(`[Discord API Error] Failed to set deafen=${deafen} for users:`, err);
+        }
+    }
 
-            ffmpeg.setFfmpegPath(ffmpegStatic);
-            let output: string = `${Date.now()}-${user.id}.mp3`
-            let segmentId = (game.currentGameModeData as Karaoke_Duett).currentSong.pSegments.find(s => s.playerId == user.id)?.segmentId
-            if (!segmentId) segmentId = 0;
+    // --- Shared Helper: Final Mix Generation ---
+    private async finalizeKaraoke(game: Game) {
+        const outputs = game.currentGameModeData?.outputs;
+        if (!outputs || outputs.length === 0) throw new Error("No outputs to finalize");
 
-            ffmpeg()
-                .input(`uploads/karaoke/${game.currentGameModeData.currentSong.Song.Segments[segmentId].fileUrl}`)
-                .input(`uploads/karaoke/${data.payload.fileUrl}`)
-                .outputOptions('-filter_complex', '[0]volume=0.2[a0];[1]volume=1[a1];[a0][a1]amix=inputs=2:duration=longest:normalize=0')
+        const inputsCount = outputs.length;
+
+        const inputVolumes = outputs
+            .map((_: any, idx: number) => `[${idx}:a]volume=1[a${idx}]`)
+            .join(';');
+
+        const inputLabels = outputs
+            .map((_: any, idx: number) => `[a${idx}]`)
+            .join('');
+
+        const filterComplex = `${inputVolumes};${inputLabels}concat=n=${inputsCount}:v=0:a=1[out]`;
+
+        const output = `${Date.now()}-final.mp3`;
+        return new Promise((resolve, reject) => {
+            const cmd = ffmpeg();
+            outputs.forEach((out: KaraokeFile) => {
+                cmd.input(`uploads/karaoke/output/${out.file}`);
+            });
+
+            cmd
+                .complexFilter(filterComplex, ['out'])
                 .saveToFile(`uploads/karaoke/output/${output}`)
-                .on('progress', (progress: any) => {
-                    if (progress.percent) {
-                        console.log(`Processing: ${Math.floor(progress.percent)}% done`);
-                    }
-                })
+                .on('end', () => resolve(output))
+                .on('error', (err: any) => reject(err));
+        });
+    }
 
-                .on('end', () => {
-                    console.log('FFmpeg has finished.');
-                    const ob = { playerId: user.id, file: output } as KaraokeFile;
-                    (game.currentGameModeData as Karaoke_Duett).outputs.push(ob)
+    async handleMessage(ctx: GameModeContext): Promise<void> {
+        const kdData = ctx.game.currentGameModeData as Karaoke_Duett | undefined;
 
-                    if (game.currentGameModeData.outputs.length == game.lobby.players.length) {
-
-                        finalizeKaraoke(game).then((output: unknown) => {
-                            game.currentGameModeData.finalOutput = output as string;
-                            broadcast({ type: 'kd:playback_ready', payload: { file: output as string } });
-                        })
-                            .catch((err: any) => {
-                                console.error('Final mix error:', err);
-                            });
-
-                        game.currentGameModeData.state = "reviewing"
-                        broadcast({ type: "kd:round_finished", payload: { game: game } })
-                    } else {
-                        send({ type: "kd:proccess_completed" })
-                    }
-                })
-
-                .on('error', (error: any) => {
-                    console.error(error);
-
-                });
-            break;
+        if (!kdData) {
+            console.error(`[KD Handler] State error: currentGameModeData is missing for game ${ctx.game.id}`);
+            return;
         }
 
-        case "kd:start_round": {
-            if (game.lobby.host.id != user.id) {
-                send({ type: "kd:error", payload: { status: "Access Denied" } })
-                return;
-            }
+        try {
+            switch (ctx.dataType) {
+                case "kd:record_uploaded": {
+                    const userId = Number(ctx.userId);
+                    if (!userId || isNaN(userId)) return;
 
-            prisma.user.findMany({
-                where: {
-                    id: {
-                        in: game.lobby.players.map(p => Number(p.id))
+                    const fileUrl = typeof ctx.payload?.fileUrl === "string" ? ctx.payload.fileUrl : null;
+                    if (!fileUrl) return;
+
+                    // Async execution detached securely via the helper
+                    this.setDiscordDeafenStatus([userId], false);
+
+                    ffmpeg.setFfmpegPath(ffmpegStatic as string);
+                    const output = `${Date.now()}-${userId}.mp3`;
+
+                    let segmentId = kdData.currentSong?.pSegments?.find(s => s.playerId === userId)?.segmentId;
+                    if (typeof segmentId !== "number") segmentId = 0;
+
+                    const backingTrackUrl = kdData.currentSong?.Song?.Segments?.[segmentId]?.fileUrl;
+                    if (!backingTrackUrl) {
+                        return ctx.send({ type: "kd:error", message: "backing_track_not_found" });
                     }
-                },
-                select: {
-                    discordId: true
+
+                    ffmpeg()
+                        .input(`uploads/karaoke/${backingTrackUrl}`)
+                        .input(`uploads/karaoke/${fileUrl}`)
+                        .outputOptions('-filter_complex', '[0]volume=0.2[a0];[1]volume=1[a1];[a0][a1]amix=inputs=2:duration=longest:normalize=0')
+                        .saveToFile(`uploads/karaoke/output/${output}`)
+                        .on('end', () => {
+                            const ob: KaraokeFile = { playerId: userId, file: output };
+                            kdData.outputs.push(ob);
+
+                            if (kdData.outputs.length === ctx.game.lobby.players.length) {
+                                this.finalizeKaraoke(ctx.game)
+                                    .then((mixOutput: unknown) => {
+                                        kdData.finalOutput = mixOutput as string;
+                                        ctx.broadcast({ type: 'kd:playback_ready', payload: { file: mixOutput as string } });
+                                    })
+                                    .catch((err: any) => {
+                                        console.error('[Final Mix Error]:', err);
+                                    });
+
+                                kdData.state = "reviewing";
+                                ctx.broadcast({ type: "kd:round_finished", payload: { game: ctx.game } });
+                            } else {
+                                ctx.send({ type: "kd:proccess_completed" });
+                            }
+                        })
+                        .on('error', (error: any) => {
+                            console.error("[FFmpeg Processing Error]:", error);
+                            ctx.send({ type: "kd:error", message: "audio_processing_failed" });
+                        });
+                    break;
                 }
-            })
-                .then(async (res: any) => {
-                    console.log(res)
-                    await fetch(`${process.env.DISCORD_API_URL}/deafen`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            userIds: res.map((u: any) => u.discordId),
-                            guildId: process.env.DISCORD_GUILD_ID
-                        })
-                    })
-                        .then((res: any) => {
-                            console.log(res)
-                        })
-                        .catch((err: any) => {
-                            console.error(err);
-                        })
-                })
 
+                case "kd:start_round": {
+                    if (ctx.game.lobby.host.id !== ctx.userId) {
+                        return ctx.send({ type: "kd:error", payload: { status: "Access Denied" } });
+                    }
 
+                    const playerIds = ctx.game.lobby.players.map(p => Number(p.id)).filter(id => !isNaN(id));
+                    this.setDiscordDeafenStatus(playerIds, true);
 
-            game.currentGameModeData.state = "pending";
-            game.currentGameModeData.isVoteOpen = false;
-            game.currentGameModeData.inputs = [];
-            game.currentGameModeData.outputs = [];
-            game.currentGameModeData.votes = []
-            broadcast({ type: "kd:round_started", payload: { game: game } })
-            break;
+                    kdData.state = "pending";
+                    kdData.isVoteOpen = false;
+                    kdData.inputs = [];
+                    kdData.outputs = [];
+                    kdData.votes = [];
 
-        }
+                    ctx.broadcast({ type: "kd:round_started", payload: { game: ctx.game } });
+                    break;
+                }
 
-        case "kd:request_playback": {
-            if (game.lobby.host.id != user.id) {
-                send({ type: "kd:error", payload: { status: "Access Denied" } })
-                return;
+                case "kd:request_playback": {
+                    if (ctx.game.lobby.host.id !== ctx.userId) {
+                        return ctx.send({ type: "kd:error", payload: { status: "Access Denied" } });
+                    }
+
+                    const targetUser = ctx.payload?.targetUser;
+                    if (!targetUser) return;
+
+                    ctx.broadcast({ type: "kd:force_playback", payload: { targetUser } });
+                    break;
+                }
+
+                case "kd:open_vote": {
+                    if (ctx.game.lobby.host.id !== ctx.userId) {
+                        return ctx.send({ type: "kd:error", payload: { status: "Access Denied" } });
+                    }
+
+                    kdData.isVoteOpen = true;
+                    ctx.broadcast({ type: "kd:vote_opened" });
+                    break;
+                }
+
+                case "kd:vote": {
+                    const targetId = typeof ctx.payload?.targetId === "string" ? ctx.payload.targetId : null;
+                    const voterId = ctx.userId;
+
+                    if (!targetId || !voterId) return;
+
+                    if (voterId === targetId) {
+                        return ctx.send({ type: "kd:error", payload: { status: "You cant vote to yourself" } });
+                    }
+
+                    const oldVoteIndex = kdData.votes.findIndex(v => v.playerId === Number(voterId));
+                    if (oldVoteIndex !== -1) {
+                        if (kdData.votes[oldVoteIndex].votedPlayerId === targetId) return;
+                        kdData.votes.splice(oldVoteIndex, 1);
+                    }
+
+                    kdData.votes.push({ playerId: Number(voterId), votedPlayerId: Number(targetId) });
+                    ctx.broadcast({ type: "kd:update_votes", payload: { votes: kdData.votes } });
+                    break;
+                }
+
+                case "kd:playFinal": {
+                    if (ctx.game.lobby.host.id !== ctx.userId) {
+                        return ctx.send({ type: "kd:error", payload: { status: "Access Denied" } });
+                    }
+                    ctx.broadcast({ type: "kd:playFinal_force" });
+                    break;
+                }
+
+                case "kd:next_song": {
+                    if (ctx.userId !== ctx.game.lobby.host.id) return;
+
+                    if (!kdData.Playlist || !kdData.Playlist.Songs) return;
+
+                    if (kdData.currentSongIndex >= kdData.Playlist.Songs.length - 1) {
+                        return ctx.send({ type: "kd:no_more_song" });
+                    }
+
+                    kdData.currentSongIndex++;
+                    kdData.currentSong.Song = kdData.Playlist.Songs[kdData.currentSongIndex];
+                    kdData.isVoteOpen = false;
+                    kdData.inputs = [];
+                    kdData.outputs = [];
+                    kdData.votes = [];
+                    kdData.finalOutput = null;
+
+                    if (!kdData.currentSong.Song.Segments || kdData.currentSong.Song.Segments.length === 0) return;
+
+                    const arr = [...kdData.currentSong.Song.Segments];
+                    for (let i = arr.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [arr[i], arr[j]] = [arr[j], arr[i]];
+                    }
+                    kdData.currentSong.Song.Segments = arr;
+
+                    kdData.state = "pending";
+                    ctx.broadcast({ type: 'kd:update_gamedata', payload: { game: ctx.game } });
+                    break;
+                }
+
+                default:
+                    break;
             }
-
-            broadcast({ type: "kd:force_playback", payload: { targetUser: data.payload.targetUser } })
-            break;
-
-        }
-
-        case "kd:open_vote": {
-            if (game.lobby.host.id != user.id) {
-                send({ type: "kd:error", payload: { status: "Access Denied" } })
-                return;
-            }
-
-            game.currentGameModeData.isVoteOpen = true;
-
-            broadcast({ type: "kd:vote_opened" })
-            break;
-        }
-
-        case "kd:vote": {
-            if (user.id == data.payload.targetId) {
-                send({ type: "kd:error", payload: { status: "You cant vote to yourself" } });
-                return;
-            }
-            const currentData = game.currentGameModeData as Karaoke_Duett;
-            const oldVote = currentData.votes.find(v => v.playerId == user.id)
-            if (oldVote) {
-                if (oldVote.votedPlayerId == data.payload.targetId) return;
-                currentData.votes = currentData.votes.filter(v => v.playerId != user.id);
-            }
-
-            currentData.votes.push({ playerId: user.id, votedPlayerId: data.payload.targetId })
-            broadcast({ type: "kd:update_votes", payload: { votes: currentData.votes } })
-            break;
-
-        }
-
-        case "kd:playFinal": {
-            if (game.lobby.host.id != user.id) {
-                send({ type: "kd:error", payload: { status: "Access Denied" } })
-                return;
-            }
-            broadcast({ type: "kd:playFinal_force" })
-            break;
-        }
-
-
-        case "kd:next_song": {
-            if (user.id != game.lobby.host) return;
-
-            const currentData = game.currentGameModeData as Karaoke_Duett;
-            if (!currentData.Playlist || !currentData.Playlist.Songs) return;
-            if (currentData.currentSongIndex >= currentData.Playlist.Songs.length - 1) {
-                send({ type: "ks:no_more_song" })
-                return;
-            }
-
-            currentData.currentSongIndex++;
-            currentData.currentSong.Song = currentData.Playlist.Songs[currentData.currentSongIndex]
-            currentData.isVoteOpen = false;
-            currentData.inputs = [];
-            currentData.outputs = [];
-            currentData.votes = [],
-                currentData.finalOutput = null;
-
-            if (!currentData.currentSong.Song.Segments || currentData.currentSong.Song.Segments.length == 0) return;
-            currentData.currentSong.Song.Segments = currentData.currentSong.Song.Segments.sort(() => Math.random() - 0.5);
-
-            currentData.state = "pending"
-            broadcast({ type: 'kd:update_gamedata', payload: { game: game } })
-            break;
+        } catch (error) {
+            console.error(`[KD Class Handler Fatal Error] Crash prevented in case ${ctx.dataType}:`, error);
+            ctx.send({ type: "kd:error", message: "internal_server_error_in_module" });
         }
     }
 }

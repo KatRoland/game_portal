@@ -1,37 +1,68 @@
-
+import { IGameModeHandler, GameModeContext } from "../../types/GameModeHandler";
 import { QA } from "../../types/gamemode/QA";
-import { Game } from "../../types/Game";
 
-export function handleQAMessages(user: any, data: any, game: Game, broadcast: (msg: any) => void, send: (msg: any) => void) {
-    console.log('Handling QA messages', data);
-    console.log('Current game state', game);
-    console.log("user:", user);
+export class QAHandler implements IGameModeHandler {
 
-    switch (data.type) {
-        case "qa:ask_question": {
-            const question = typeof data.payload?.question === "string" ? data.payload.question : null;
-            if (question) {
-                game.currentGameModeData.question = question;
-                game.currentGameModeData.answers = [];
-                broadcast({ type: "qa:new_question", payload: { question: ({ question: game.currentGameModeData.question, answers: game.currentGameModeData.answers }) } });
-            }
-            break;
+    // --- Main Handler ---
+    async handleMessage(ctx: GameModeContext): Promise<void> {
+        // 1. Defensive State Verification
+        const qaData = ctx.game.currentGameModeData as QA | undefined;
+
+        if (!qaData) {
+            console.error(`[QA Handler] State error: currentGameModeData is missing for game ${ctx.game.id}`);
+            return;
         }
 
-        case "qa:answer_question": {
-            const playerId = typeof user?.id === "string" ? user.id : "";
-            const playerName = typeof user?.username === "string" ? user.username : "Anonymous";
-            const answer = typeof data.payload?.answer === "string" ? data.payload.answer : null;
-            if (playerId && playerName && answer) {
-                if (game.currentGameModeData.answers.find((a: any) => a.playerId === playerId)) {
-                    console.log(`Player ${playerId} has already answered.`);
-                    return;
+        // 2. Global Sandbox Isolation
+        try {
+            switch (ctx.dataType) {
+                case "qa:ask_question": {
+                    // It is generally expected only host can ask questions, but retaining original logic
+                    const question = typeof ctx.payload?.question === "string" ? ctx.payload.question : null;
+
+                    if (question) {
+                        qaData.question = question;
+                        qaData.answers = [];
+
+                        ctx.broadcast({
+                            type: "qa:new_question",
+                            payload: {
+                                question: {
+                                    question: qaData.question,
+                                    answers: qaData.answers
+                                }
+                            }
+                        });
+                    }
+                    break;
                 }
-                game.currentGameModeData.answers.push({ playerId, playerName, answer });
-                console.log("Updated answers:", game.currentGameModeData.answers);
-                broadcast({ type: "qa:update_answers", payload: { answers: game.currentGameModeData.answers } });
+
+                case "qa:answer_question": {
+                    const playerId = String(ctx.userId);
+                    const playerName = typeof ctx.user?.username === "string" ? ctx.user.username : "Anonymous";
+                    const answer = typeof ctx.payload?.answer === "string" ? ctx.payload.answer : null;
+
+                    if (playerId && playerName && answer) {
+                        if (qaData.answers.find(a => String(a.playerId) === playerId)) {
+                            return;
+                        }
+
+                        qaData.answers.push({ playerId, playerName, answer });
+
+                        ctx.broadcast({
+                            type: "qa:update_answers",
+                            payload: { answers: qaData.answers }
+                        });
+                    }
+                    break;
+                }
+
+                default:
+                    break;
             }
-            break;
+        } catch (error) {
+            console.error(`[QA Class Handler Fatal Error] Crash prevented in case ${ctx.dataType}:`, error);
+            ctx.send({ type: "qa:error", message: "internal_server_error_in_module" });
         }
     }
 }
