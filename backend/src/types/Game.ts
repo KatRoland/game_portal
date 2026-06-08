@@ -5,10 +5,12 @@ import { Scoreboard } from "./Score";
 
 export interface Game {
     id: string;
-    lobby : Lobby;
+    lobby: Lobby;
     startedAt: string;
     mode: GameMode;
     currentGameModeData?: any;
     nextGameModes: NextGameMode[];
     Scoreboard?: Scoreboard;
+
+    state?: "initializing" | "active" | "ended";
 }

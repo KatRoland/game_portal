@@ -118,7 +118,6 @@ export async function handleMQMessages(user: any, data: any, game: Game, broadca
                     const entry = (game.currentGameModeData as MUSIC_QUIZ).Scoreboard.scores.find(s => s.playerId === playerId);
                     if (entry) entry.score += 1;
 
-                    // Dedicated logic for update_answers
                     const recipients = new Set<string>();
                     recipients.add(game.lobby.host.id);
                     (game.currentGameModeData as MUSIC_QUIZ).answers.forEach(a => recipients.add(a.playerId));
@@ -144,7 +143,6 @@ export async function handleMQMessages(user: any, data: any, game: Game, broadca
                     if (entry) entry.score -= 1;
                     answer.state = "incorrect";
 
-                    // Dedicated logic for update_answers
                     const recipients = new Set<string>();
                     recipients.add(game.lobby.host.id);
                     (game.currentGameModeData as MUSIC_QUIZ).answers.forEach(a => recipients.add(a.playerId));
