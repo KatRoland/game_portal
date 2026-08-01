@@ -32,8 +32,10 @@ export interface GameRules {
 }
 
 export type UNOPhaseData =
+    | { phase: "lobby"; }
+    | { phase: "init"; }
     | { phase: "draw"; cardsToDraw: number; canDrawMore: boolean }
-    | { phase: "play"; canPlayCard: boolean }
+    | { phase: "play"; }
     | { phase: "choose_color"; pendingCard: UNOCard };
 
 export interface UNO {
@@ -46,12 +48,12 @@ export interface UNO {
     playersWhoOut: {
         index: number;
         playerId: string;
-    }[] // store who is out in the order they went out
+    }[]
     Scoreboard?: Scoreboard;
     gameRules: GameRules;
     state: {
         direction: 1 | -1;
-        activePhase: UNOPhase; // i keep it for debugging
+        activePhase: UNOPhase;
         activePhaseData: UNOPhaseData;
     }
 }
