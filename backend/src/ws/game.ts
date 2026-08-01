@@ -73,7 +73,6 @@ const COMPONENT_HANDLERS: Record<string, IGameModeHandler> = {
 
 const CoreCommands = new Map<string, ICommand>();
 
-// game:init removed — initialization is now handled by GameServer.initGame() called from lobby via handlers.ts
 
 CoreCommands.set("game:load", {
   requireGame: true,
@@ -119,7 +118,7 @@ CoreCommands.set("game:decrement_score", {
 CoreCommands.set("game:end_game_mode", {
   requireGame: true,
   execute: (ctx) => {
-    ctx.game!.mode = "NONE" as any; // Játékmódok közötti üres állapot átmenet
+    ctx.game!.mode = GameMode.Cross;
     ctx.broadcastToLobby({ type: "game:game_mode_ended", payload: { game: ctx.game } });
   }
 });
@@ -157,6 +156,8 @@ CoreCommands.set("game:next_game_mode", {
     } else {
       game.mode = GameMode.Ended;
       ctx.broadcastToLobby({ type: "game:game_ended", payload: { game: game } });
+      endGame(ctx.gameId!);
+      ctx.server.removeGame(ctx.gameId!);
     }
   }
 });
@@ -167,6 +168,7 @@ CoreCommands.set("game:end_game", {
   execute: (ctx) => {
     ctx.game!.mode = GameMode.Ended;
     ctx.broadcastToLobby({ type: "game:game_ended", payload: { game: ctx.game } });
+    endGame(ctx.gameId!);
     ctx.server.removeGame(ctx.gameId!);
   }
 });
