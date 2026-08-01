@@ -1,0 +1,57 @@
+import { Scoreboard } from "../Score";
+
+export interface UNOPlayer {
+    cards: UNOCardInHand[];
+    name: string;
+    hasSaidUno: boolean;
+    stillPlaying: boolean;
+}
+
+export interface UNOCard {
+    type: "number" | "wild" | "skip" | "reverse" | "draw2" | "draw4";
+    color: "red" | "green" | "blue" | "yellow" | "wild";
+    value: number | "wild" | "skip" | "reverse" | "draw2" | "draw4";
+}
+
+export interface UNOCardInHand extends UNOCard {
+    id: string;
+}
+
+export type UNOPhase = "draw" | "play" | "choose_color";
+
+export interface GameRules {
+    jumpin: boolean;
+    canPlayMultipleCards: boolean;
+    uno: boolean;
+    unoPenalty: number;
+    initialCards: number;
+    deckType: "standard" | "infinite";
+    resetCardsToDraw: boolean;
+    drawStackingMode: "linear" | "multiply";
+    endCondition: "first_to_win" | "last_standing";
+}
+
+export type UNOPhaseData =
+    | { phase: "draw"; cardsToDraw: number; canDrawMore: boolean }
+    | { phase: "play"; canPlayCard: boolean }
+    | { phase: "choose_color"; pendingCard: UNOCard };
+
+export interface UNO {
+    currentTurnPlayerId: string;
+    playerOrderIds: string[];
+    topCard: UNOCard;
+    drawPile: UNOCard[];
+    backLog: UNOCard[];
+    players: { [playerId: string]: UNOPlayer };
+    playersWhoOut: {
+        index: number;
+        playerId: string;
+    }[] // store who is out in the order they went out
+    Scoreboard?: Scoreboard;
+    gameRules: GameRules;
+    state: {
+        direction: 1 | -1;
+        activePhase: UNOPhase; // i keep it for debugging
+        activePhaseData: UNOPhaseData;
+    }
+}
