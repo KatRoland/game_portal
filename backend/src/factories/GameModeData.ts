@@ -1,6 +1,7 @@
 import prisma from "../db/prisma";
 import { GameMode } from "../types/GameMode";
 import { Scoreboard } from "../types/Score";
+import { UNO, UNOCard, UNOCardInHand, UNOPlayer, GameRules } from "../types/gamemode/UNO";
 
 function shuffleArray<T>(array: T[]): T[] {
     const arr = [...array];

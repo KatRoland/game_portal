@@ -4,10 +4,12 @@ import jwt from "jsonwebtoken";
 import prisma from "../db/prisma";
 import { Lobby } from "../types/Lobby";
 import { Game } from "../types/Game";
+import { ClientInfo } from "../types/ClientInfo";
 import { GameMode } from "../types/GameMode";
 import { QA } from "../types/gamemode/QA";
 import { IGameModeHandler, GameModeContext } from "../types/GameModeHandler";
 import { MusicQuizHandler } from "./gamemodes/mq";
+import { UnoHandler } from "./gamemodes/uno";
 import { Scoreboard } from "../types/Score";
 import { NextGameMode } from "../types/NextGameMode";
 import { MUSIC_QUIZ } from "../types/gamemode/MUSIC_QUIZ";
@@ -24,15 +26,6 @@ import { createGameModeData } from "../factories/GameModeData";
 
 import { JWT_SECRET } from "../config";
 import { endGame } from "./handlers";
-
-type ClientInfo = {
-  id: string;
-  ws: WebSocket;
-  name?: string | null;
-  remote?: string | undefined;
-  accessToken?: string | undefined;
-  user?: { id: string; username?: string | null; avatar?: string | null; isAdmin?: boolean } | undefined;
-};
 
 interface CommandContext {
   id: string;
@@ -73,73 +66,14 @@ function shuffleArray<T>(array: T[]): T[] {
 
 const COMPONENT_HANDLERS: Record<string, IGameModeHandler> = {
   mq: new MusicQuizHandler(),
+  uno: new UnoHandler(),
   // qa: new QAHandler(),
   // btn: new ButtonClickerHandler(),
 };
 
 const CoreCommands = new Map<string, ICommand>();
 
-CoreCommands.set("game:init", {
-  requireGame: false,
-  execute: async (ctx) => {
-    const gameId = ctx.gameId;
-    const lobby = ctx.payload.lobby;
-    if (!gameId || !lobby) return;
-
-    const existingGame = ctx.server.getGames().find((g: any) => g.id === gameId);
-    if (existingGame) {
-      if (existingGame.state === "initializing") return;
-      return ctx.sendToClient({ type: "game:init:error", message: "game_already_initialized" });
-    }
-
-    const placeholder = { id: gameId, state: "initializing" } as any;
-    ctx.server.getGames().push(placeholder);
-
-    try {
-      const ScoreboardObj: Scoreboard = {
-        scores: lobby.players.map((p: any) => ({ playerId: p.id, playerName: p.username || 'Anonymous', score: 0 }))
-      };
-
-      if (!lobby.gameModeOrder || lobby.gameModeOrder.length === 0) {
-        ctx.server.removeGame(gameId);
-        return ctx.sendToClient({ type: "game:init:error", message: "no_game_modes_configured" });
-      }
-
-      const FirstGameMode = lobby.gameModeOrder.shift();
-
-      const game: Game = {
-        id: gameId,
-        lobby: lobby,
-        startedAt: new Date().toISOString(),
-        mode: FirstGameMode.type,
-        nextGameModes: lobby.gameModeOrder,
-        Scoreboard: ScoreboardObj,
-        state: "active" as any
-      };
-
-      game.currentGameModeData = await createGameModeData(
-        game.mode,
-        FirstGameMode.playlist,
-        game.lobby.players,
-        ScoreboardObj
-      );
-
-      const idx = ctx.server.getGames().findIndex((g: any) => g.id === gameId);
-      if (idx !== -1) ctx.server.getGames()[idx] = game;
-
-      const gameCopy = { ...game };
-      if (gameCopy.mode === GameMode.MUSIC_QUIZ && gameCopy.currentGameModeData) {
-        gameCopy.currentGameModeData = { ...gameCopy.currentGameModeData, currentTrackIndex: 0, currentTrack: null, tracks: [] } as any;
-      }
-      ctx.broadcastToLobby({ type: "game:started", payload: { game: gameCopy } });
-
-    } catch (error) {
-      ctx.server.removeGame(gameId); // Takarítás hiba esetén
-      console.error(`[Init Command Error]:`, error);
-      ctx.sendToClient({ type: "game:error", message: (error as Error).message || "failed_to_initialize" });
-    }
-  }
-});
+// game:init removed — initialization is now handled by GameServer.initGame() called from lobby via handlers.ts
 
 CoreCommands.set("game:load", {
   requireGame: true,
@@ -260,6 +194,59 @@ export class GameServer {
     if (gameIndex !== -1) {
       this.games.splice(gameIndex, 1);
       console.log(`[Garbage Collection] Room ${gameId} successfully purged from RAM.`);
+    }
+  }
+
+  public async initGame(gameId: string, lobby: Lobby): Promise<void> {
+    const existingGame = this.games.find((g: any) => g.id === gameId);
+    if (existingGame) {
+      console.warn(`[GameServer.initGame] Game ${gameId} already exists, skipping init.`);
+      return;
+    }
+
+    const placeholder = { id: gameId, state: "initializing" } as any;
+    this.games.push(placeholder);
+
+    try {
+      const ScoreboardObj: Scoreboard = {
+        scores: lobby.players.map((p: any) => ({ playerId: String(p.id), playerName: p.username || 'Anonymous', score: 0 }))
+      };
+
+      if (!lobby.gameModeOrder || lobby.gameModeOrder.length === 0) {
+        this.removeGame(gameId);
+        console.error(`[GameServer.initGame] No game modes configured for game ${gameId}`);
+        return;
+      }
+
+      // Take the first game mode from the order
+      const gameModeOrderCopy = [...lobby.gameModeOrder];
+      const FirstGameMode = gameModeOrderCopy.shift()!;
+
+      const game: Game = {
+        id: gameId,
+        lobby: lobby,
+        startedAt: new Date().toISOString(),
+        mode: FirstGameMode.type,
+        nextGameModes: gameModeOrderCopy,
+        Scoreboard: ScoreboardObj,
+        state: "active" as any
+      };
+
+      game.currentGameModeData = await createGameModeData(
+        game.mode,
+        FirstGameMode.playlist,
+        game.lobby.players,
+        ScoreboardObj
+      );
+
+      const idx = this.games.findIndex((g: any) => g.id === gameId);
+      if (idx !== -1) this.games[idx] = game;
+
+      console.log(`[GameServer.initGame] Game ${gameId} initialized with mode ${game.mode}`);
+
+    } catch (error) {
+      this.removeGame(gameId);
+      console.error(`[GameServer.initGame] Failed to initialize game ${gameId}:`, error);
     }
   }
 

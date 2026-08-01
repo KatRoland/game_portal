@@ -5,15 +5,7 @@ import prisma from "../db/prisma";
 import { Lobby } from "../types/Lobby";
 import { gameInit } from "./handlers";
 import { JWT_SECRET } from "../config";
-
-type ClientInfo = {
-  id: string;
-  ws: WebSocket;
-  name?: string | null;
-  remote?: string | undefined;
-  accessToken?: string | undefined;
-  user?: { id: string; username?: string | null; avatar?: string | null; isAdmin?: boolean } | undefined;
-};
+import { ClientInfo } from "../types/ClientInfo";
 
 class LobbyServer {
   private clients = new Map<string, ClientInfo>();
@@ -229,7 +221,7 @@ class LobbyServer {
           break;
         }
 
-        gameInit(id, lobby.id, lobby, this.clients.get(id)!);
+        gameInit(lobby.id, lobby);
 
         lobby.state = 'started';
         const payload = { lobbyId: lobby.id, startedAt: new Date().toISOString() };

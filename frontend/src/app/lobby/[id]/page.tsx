@@ -90,6 +90,14 @@ export default function LobbyRoomPage() {
         try { router.push(`/game/${payload.lobbyId}`) } catch (e) { console.error(e) }
       })
 
+      wsRef.current.on('lobby:gameOrder_updated', (payload: { lobbyId: string; gameModeOrder: NextGameMode[] }) => {
+        if (payload.lobbyId !== id) return
+        setLobby((prev) => {
+          if (!prev) return prev
+          return { ...prev, gameModeOrder: payload.gameModeOrder }
+        })
+      })
+
 
       wsRef.current.on('game:started', (payload: { game: Game }) => {
         if (payload.game.id !== id) return
@@ -125,6 +133,7 @@ export default function LobbyRoomPage() {
       { id: 'gm5', type: GameMode.Karaoke_Duett, title: "Karaoke (duett)", createdAt: new Date().toISOString(), hasPlaylist: true },
       { id: 'gm6', type: GameMode.SMASH_OR_PASS, title: "Smash or Pass", createdAt: new Date().toISOString(), hasPlaylist: false },
       { id: 'gm7', type: GameMode.SMASH_OR_PASS_PLAYLIST, title: "Smash or Pass (Playlist)", createdAt: new Date().toISOString(), hasPlaylist: true },
+      { id: 'gm8', type: GameMode.UNO, title: "UNO", createdAt: new Date().toISOString(), hasPlaylist: false },
     ]
   }
 
@@ -365,7 +374,6 @@ export default function LobbyRoomPage() {
                 <button
                   onClick={() => {
                     try { wsRef.current?.send({ type: 'lobby:start', payload: { lobbyId: id } }) } catch (e) { console.error(e) }
-                    try { wsRef.current?.send({ type: 'game:init', payload: { gameId: id, lobby: lobby } }) } catch (e) { console.error(e) }
                   }}
                   className="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg"
                 >
