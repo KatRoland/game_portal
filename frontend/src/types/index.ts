@@ -236,3 +236,62 @@ export interface KDFN extends KSFN {
   setPlayFinal: (state: boolean) => void
   reqPlayFinal: () => void
 }
+
+export interface UNOCard {
+  type: "number" | "wild" | "skip" | "reverse" | "draw2" | "draw4";
+  color: "red" | "green" | "blue" | "yellow" | "wild";
+  value: number | "wild" | "skip" | "reverse" | "draw2" | "draw4";
+}
+
+export interface UNOCardInHand extends UNOCard {
+  id: string;
+}
+
+export interface UNOPlayer {
+  cards: UNOCardInHand[];
+  name: string;
+  hasSaidUno: boolean;
+  stillPlaying: boolean;
+}
+
+export type UNOPhase = "draw" | "play" | "choose_color";
+
+export interface UNOGameRules {
+  jumpin: boolean;
+  canPlayMultipleCards: boolean;
+  uno: boolean;
+  unoPenalty: number;
+  initialCards: number;
+  deckType: "standard" | "infinite";
+  resetCardsToDraw: boolean;
+  drawStackingMode: "linear" | "multiply";
+  endCondition: "first_to_win" | "last_standing";
+}
+
+export type UNOPhaseData =
+  | { phase: "lobby" }
+  | { phase: "init" }
+  | { phase: "draw"; cardsToDraw: number; canDrawMore: boolean }
+  | { phase: "play" }
+  | { phase: "choose_color"; pendingCard: UNOCard };
+
+export interface UNOState {
+  currentTurnPlayerId: string;
+  playerOrderIds: string[];
+  topCard: UNOCard;
+  drawPile: UNOCard[];
+  backLog: UNOCard[];
+  players: { [playerId: string]: UNOPlayer };
+  playersWhoOut: {
+    index: number;
+    playerId: string;
+  }[];
+  Scoreboard?: Scoreboard;
+  gameRules: UNOGameRules;
+  state: {
+    direction: 1 | -1;
+    activePhase: UNOPhase;
+    activePhaseData: UNOPhaseData;
+  };
+}
+

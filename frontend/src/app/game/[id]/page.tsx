@@ -14,6 +14,7 @@ import KaraokeSolo from '@/components/games/karaokesolo';
 import KaraokeDuett from '@/components/games/karaokeduett';
 import SmashOrPass from '@/components/games/SmashOrPass';
 import SmashOrPassPlaylist from '@/components/games/SmashOrPassPlaylist';
+import UNO from '@/components/games/UNO';
 import { getAccessToken } from '@/lib/api'
 
 export default function GamePage() {
@@ -533,6 +534,10 @@ export default function GamePage() {
           return (
             <SmashOrPassPlaylist isHost={isHost} GameData={gameData} SOPPLFN={SOPPLFN} GameFN={GameFN} />
           )
+        case 'UNO':
+          return (
+            <UNO isHost={isHost} GameFN={GameFN} GameData={gameData} />
+          );
         case 'Cross':
           return (
             <CrossGame isHost={isHost} GameFN={GameFN} GameData={gameData} />
