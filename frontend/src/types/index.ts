@@ -295,3 +295,9 @@ export interface UNOState {
   };
 }
 
+export interface UNO_FN {
+  start: (rules: UNOGameRules) => void
+  playCard: (cardId: string) => void
+  drawCard: () => void
+  sayUno: () => void
+}

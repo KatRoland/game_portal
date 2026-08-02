@@ -245,6 +245,7 @@ export class GameServer {
       if (idx !== -1) this.games[idx] = game;
 
       console.log(`[GameServer.initGame] Game ${gameId} initialized with mode ${game.mode}`);
+      console.log(`[GameServer.initGame] GameModeData: ${JSON.stringify(game.currentGameModeData)}`)
 
     } catch (error) {
       this.removeGame(gameId);

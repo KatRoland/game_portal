@@ -1,9 +1,5 @@
 import { UNOCard } from '@/types';
 
-/**
- * Returns the relative URL path to the SVG image for a given UNO card.
- * All card SVG files are stored in /cards/uno/ directory under public folder.
- */
 export function getUNOCardImagePath(card: UNOCard | null | undefined): string {
   if (!card) {
     return '/cards/uno/back.svg';

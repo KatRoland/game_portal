@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Game,
   GameFN,
@@ -10,14 +10,19 @@ import {
   UNOCard,
   UNOCardInHand,
   UNOState,
+  GameMode,
+  UNO_FN,
 } from '@/types';
 import { getUserAvatar } from '@/lib/api';
 import { getUNOCardImagePath, getUNOCardBackPath } from '@/lib/unoCardHelper';
+import { useUser } from '@/contexts/UserContext';
+import { getWSClient } from '@/lib/ws';
 
 interface UNOProps {
   GameData: Game | null;
   GameFN: GameFN;
   isHost: boolean;
+  UNOFN: UNO_FN;
 }
 
 const DEFAULT_RULES: UNOGameRules = {
@@ -31,25 +36,6 @@ const DEFAULT_RULES: UNOGameRules = {
   drawStackingMode: 'linear',
   endCondition: 'first_to_win',
 };
-
-const MOCK_OTHER_PLAYERS = [
-  { id: '2', name: 'Alice', cardCount: 3, hasSaidUno: false, isTurn: true },
-  { id: '3', name: 'Bob', cardCount: 8, hasSaidUno: false, isTurn: false },
-  { id: '4', name: 'Charlie', cardCount: 1, hasSaidUno: true, isTurn: false },
-];
-
-const MOCK_USER_HAND: UNOCardInHand[] = [
-  { id: 'c1', color: 'red', type: 'number', value: 7 },
-  { id: 'c2', color: 'red', type: 'number', value: 7 },
-  { id: 'c3', color: 'yellow', type: 'reverse', value: 'reverse' },
-  { id: 'c4', color: 'yellow', type: 'reverse', value: 'reverse' },
-  { id: 'c5', color: 'yellow', type: 'reverse', value: 'reverse' },
-  { id: 'c6', color: 'green', type: 'draw2', value: 'draw2' },
-  { id: 'c7', color: 'blue', type: 'number', value: 9 },
-  { id: 'c8', color: 'wild', type: 'draw4', value: 'draw4' },
-];
-
-const MOCK_TOP_CARD: UNOCard = { color: 'red', type: 'number', value: 7 };
 
 function groupHandCards(cards: UNOCardInHand[]) {
   const groups: { key: string; cards: UNOCardInHand[] }[] = [];
@@ -83,16 +69,15 @@ function OtherPlayerHandDisplay({
 
   return (
     <div
-      className={`flex flex-col items-center p-4 rounded-2xl border transition-all ${
-        isTurn
-          ? 'border-yellow-400/80 bg-yellow-500/10 shadow-lg shadow-yellow-500/20 scale-105'
-          : 'border-white/10 bg-white/5'
-      }`}
+      className={`flex flex-col items-center p-4 rounded-2xl border transition-all ${isTurn
+        ? 'border-yellow-400/80 bg-yellow-500/10 shadow-lg shadow-yellow-500/20 scale-105'
+        : 'border-white/10 bg-white/5'
+        }`}
     >
       <div className="flex items-center gap-2 mb-3">
         <span className="font-bold text-white text-sm">{playerName}</span>
         {hasSaidUno && (
-          <span className="px-2 py-0.5 rounded-full bg-red-600 text-[10px] font-black text-white uppercase tracking-wider animate-pulse shadow">
+          <span className="px-2 py-0.5 rounded-full bg-red-600 text-[10px] font-black text-white uppercase tracking-wider shadow animate-pulse">
             UNO!
           </span>
         )}
@@ -131,28 +116,129 @@ function OtherPlayerHandDisplay({
   );
 }
 
-export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
+export default function UNO({ GameData, GameFN, isHost, UNOFN }: UNOProps) {
   const { endGame, endGameMode, nextGameMode } = GameFN;
+  const { user } = useUser();
+  const currentUserId = user?.id ? String(user.id) : null;
 
-  const [activeScreen, setActiveScreen] = useState<'lobby' | 'gameplay' | 'end'>(
-    'lobby'
-  );
+  const unoState = GameData?.currentGameModeData as UNOState | undefined;
 
-  const [rules, setRules] = useState<UNOGameRules>(DEFAULT_RULES);
+  const [activeScreen, setActiveScreen] = useState<'lobby' | 'gameplay' | 'end'>('lobby');
+  const [rules, setRules] = useState<UNOGameRules>(() => unoState?.gameRules || DEFAULT_RULES);
 
-  const groupedUserHand = groupHandCards(MOCK_USER_HAND);
+  useEffect(() => {
+    if (unoState?.gameRules) {
+      setRules(unoState.gameRules);
+    }
+  }, [unoState?.gameRules]);
+
+  useEffect(() => {
+    const phase = unoState?.state?.activePhase;
+    if (phase === 'play' || phase === 'draw' || phase === 'choose_color') {
+      setActiveScreen('gameplay');
+    } else if (phase === 'ended' || GameData?.mode === GameMode.Ended) {
+      setActiveScreen('end');
+    } else {
+      setActiveScreen('lobby');
+    }
+  }, [unoState?.state?.activePhase, GameData?.mode]);
+
+  // const sendSettingsWS = (updatedRules: UNOGameRules) => {
+  //   if (isHost && GameData?.id) {
+  //     getWSClient()?.send({
+  //       type: 'uno:update_settings',
+  //       payload: { gameId: GameData.id, rules: updatedRules },
+  //     });
+  //   }
+  // };
 
   const handleRuleToggle = (key: keyof UNOGameRules) => {
+    if (!isHost) return;
     if (typeof rules[key] === 'boolean') {
-      setRules((prev) => ({ ...prev, [key]: !prev[key] }));
+      const updated = { ...rules, [key]: !rules[key] };
+      setRules(updated);
+      // sendSettingsWS(updated);
     }
   };
 
-  const handleRuleChange = (
-    key: keyof UNOGameRules,
-    value: number | string
-  ) => {
-    setRules((prev) => ({ ...prev, [key]: value }));
+  const handleRuleChange = (key: keyof UNOGameRules, value: any) => {
+    if (!isHost) return;
+    const updated = { ...rules, [key]: value };
+    setRules(updated);
+    // sendSettingsWS(updated);
+  };
+
+  const handleStartRound = () => {
+    if (isHost && GameData?.id) {
+      UNOFN.start(rules)
+    }
+  };
+
+  // Real data extractions
+  const playersMap = unoState?.players || {};
+  const playerOrder = unoState?.playerOrderIds || [];
+  const userPlayerData = currentUserId && playersMap[currentUserId] ? playersMap[currentUserId] : null;
+  const userHand: UNOCardInHand[] = userPlayerData?.cards || [];
+  const groupedUserHand = groupHandCards(userHand);
+
+  const topCard: UNOCard | null = unoState?.topCard || null;
+  const drawPileCount: number = unoState?.drawPile?.length ?? 0;
+  const isClockwise = (unoState?.state?.direction ?? 1) === 1;
+
+  const otherPlayers = playerOrder
+    .filter((id) => id !== currentUserId)
+    .map((id) => {
+      const p = playersMap[id];
+      return {
+        id,
+        name: p?.name || 'Player',
+        cardCount: p?.cards?.length || 0,
+        hasSaidUno: p?.hasSaidUno || false,
+        isTurn: unoState?.currentTurnPlayerId === id,
+      };
+    });
+
+  const otherPlayersList =
+    otherPlayers.length > 0
+      ? otherPlayers
+      : (GameData?.lobby?.players || [])
+        .filter((p) => String(p.id) !== currentUserId)
+        .map((p) => ({
+          id: String(p.id),
+          name: p.username || 'Player',
+          cardCount: 0,
+          hasSaidUno: false,
+          isTurn: false,
+        }));
+
+  const winnerId = unoState?.playersWhoOut?.[0]?.playerId;
+  const winnerName = winnerId && playersMap[winnerId] ? playersMap[winnerId].name : 'Winner';
+
+  const handlePlayCard = (cardId: string) => {
+    if (GameData?.id) {
+      getWSClient()?.send({
+        type: 'uno:play_card',
+        payload: { gameId: GameData.id, cardId },
+      });
+    }
+  };
+
+  const handleDrawCard = () => {
+    if (GameData?.id) {
+      getWSClient()?.send({
+        type: 'uno:draw_card',
+        payload: { gameId: GameData.id },
+      });
+    }
+  };
+
+  const handleSayUno = () => {
+    if (GameData?.id) {
+      getWSClient()?.send({
+        type: 'uno:say_uno',
+        payload: { gameId: GameData.id },
+      });
+    }
   };
 
   return (
@@ -172,50 +258,12 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
               </svg>
             </span>
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                  <span className="bg-clip-text text-transparent bg-gradient-to-r from-red-500 via-yellow-400 to-blue-400">
-                    UNO Card Game
-                  </span>
-                </h1>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white/10 border border-white/15 text-gray-300">
-                  Teszt
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+                <span className="bg-clip-text text-transparent bg-gradient-to-r from-red-500 via-yellow-400 to-blue-400">
+                  UNO Card Game
                 </span>
-              </div>
-              <p className="mt-1 text-xs text-gray-400">
-                Current Phase: <strong className="text-white uppercase">{activeScreen}</strong>
-              </p>
+              </h1>
             </div>
-          </div>
-
-          <div className="flex items-center gap-2 bg-white/5 border border-white/10 p-1.5 rounded-2xl backdrop-blur-md">
-            <button
-              onClick={() => setActiveScreen('lobby')}
-              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${activeScreen === 'lobby'
-                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg'
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
-                }`}
-            >
-              1. Lobby & Settings
-            </button>
-            <button
-              onClick={() => setActiveScreen('gameplay')}
-              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${activeScreen === 'gameplay'
-                ? 'bg-gradient-to-r from-yellow-500 to-amber-600 text-gray-950 shadow-lg'
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
-                }`}
-            >
-              2. Gameplay Loop
-            </button>
-            <button
-              onClick={() => setActiveScreen('end')}
-              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${activeScreen === 'end'
-                ? 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-lg'
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
-                }`}
-            >
-              3. End Screen
-            </button>
           </div>
         </div>
 
@@ -225,8 +273,6 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
               <h2 className="text-base font-semibold text-white">
                 {isHost ? 'Host Controls' : 'Game Controls'}
               </h2>
-              <p className="text-xs text-gray-400">
-              </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
               <button
@@ -278,15 +324,21 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
                     Lobby Settings
                   </h2>
                   <p className="text-sm text-gray-400">
-                    Lorem
+                    {isHost ? 'Configure rules for the UNO match' : 'Host is configuring match settings'}
                   </p>
                 </div>
-                <button
-                  onClick={() => setActiveScreen('gameplay')}
-                  className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-bold shadow-lg shadow-emerald-900/40 hover:shadow-emerald-900/60 transition-all"
-                >
-                  Start Round (Launch Gameplay) →
-                </button>
+                {isHost ? (
+                  <button
+                    onClick={handleStartRound}
+                    className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-bold shadow-lg shadow-emerald-900/40 hover:shadow-emerald-900/60 transition-all"
+                  >
+                    Start Round (Launch Gameplay) →
+                  </button>
+                ) : (
+                  <div className="px-5 py-2.5 rounded-xl bg-white/10 border border-white/15 text-sm font-semibold text-gray-300 animate-pulse">
+                    Waiting for Host to start...
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -298,11 +350,12 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
                     type="range"
                     min="1"
                     max="15"
+                    disabled={!isHost}
                     value={rules.initialCards}
                     onChange={(e) =>
                       handleRuleChange('initialCards', parseInt(e.target.value))
                     }
-                    className="w-full accent-yellow-400 cursor-pointer"
+                    className="w-full accent-yellow-400 cursor-pointer disabled:opacity-50"
                   />
                 </div>
 
@@ -314,11 +367,12 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
                     type="range"
                     min="1"
                     max="10"
+                    disabled={!isHost}
                     value={rules.unoPenalty}
                     onChange={(e) =>
                       handleRuleChange('unoPenalty', parseInt(e.target.value))
                     }
-                    className="w-full accent-red-500 cursor-pointer"
+                    className="w-full accent-red-500 cursor-pointer disabled:opacity-50"
                   />
                 </div>
 
@@ -327,11 +381,12 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
                     Deck Type
                   </label>
                   <select
+                    disabled={!isHost}
                     value={rules.deckType}
                     onChange={(e) =>
                       handleRuleChange('deckType', e.target.value as 'standard' | 'infinite')
                     }
-                    className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-white/15 text-white text-sm"
+                    className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-white/15 text-white text-sm disabled:opacity-50"
                   >
                     <option value="standard">Standard Deck (108 Cards)</option>
                     <option value="infinite">Infinite Deck</option>
@@ -343,11 +398,12 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
                     Draw Stacking Mode
                   </label>
                   <select
+                    disabled={!isHost}
                     value={rules.drawStackingMode}
                     onChange={(e) =>
                       handleRuleChange('drawStackingMode', e.target.value as 'linear' | 'multiply')
                     }
-                    className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-white/15 text-white text-sm"
+                    className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-white/15 text-white text-sm disabled:opacity-50"
                   >
                     <option value="linear">Linear</option>
                     <option value="multiply">Multiply</option>
@@ -359,11 +415,12 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
                     End Condition
                   </label>
                   <select
+                    disabled={!isHost}
                     value={rules.endCondition}
                     onChange={(e) =>
                       handleRuleChange('endCondition', e.target.value as 'first_to_win' | 'last_standing')
                     }
-                    className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-white/15 text-white text-sm"
+                    className="w-full px-3 py-2 rounded-lg bg-gray-900 border border-white/15 text-white text-sm disabled:opacity-50"
                   >
                     <option value="first_to_win">First to Win</option>
                     <option value="last_standing">Last Man Standing</option>
@@ -375,27 +432,30 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
                     <span className="text-sm font-semibold text-gray-300">Jump-In Allowed</span>
                     <input
                       type="checkbox"
+                      disabled={!isHost}
                       checked={rules.jumpin}
                       onChange={() => handleRuleToggle('jumpin')}
-                      className="w-4 h-4 accent-blue-500 rounded cursor-pointer"
+                      className="w-4 h-4 accent-blue-500 rounded cursor-pointer disabled:opacity-50"
                     />
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-gray-300">Play Multiple Cards</span>
                     <input
                       type="checkbox"
+                      disabled={!isHost}
                       checked={rules.canPlayMultipleCards}
                       onChange={() => handleRuleToggle('canPlayMultipleCards')}
-                      className="w-4 h-4 accent-blue-500 rounded cursor-pointer"
+                      className="w-4 h-4 accent-blue-500 rounded cursor-pointer disabled:opacity-50"
                     />
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-gray-300">Require Say UNO</span>
                     <input
                       type="checkbox"
+                      disabled={!isHost}
                       checked={rules.uno}
                       onChange={() => handleRuleToggle('uno')}
-                      className="w-4 h-4 accent-blue-500 rounded cursor-pointer"
+                      className="w-4 h-4 accent-blue-500 rounded cursor-pointer disabled:opacity-50"
                     />
                   </div>
                 </div>
@@ -443,7 +503,7 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                {MOCK_OTHER_PLAYERS.map((player) => (
+                {otherPlayersList.map((player) => (
                   <OtherPlayerHandDisplay
                     key={player.id}
                     playerName={player.name}
@@ -459,14 +519,17 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
               <div className="flex flex-col md:flex-row items-center justify-between gap-8">
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 rounded-2xl bg-yellow-400/10 border border-yellow-400/30 flex items-center justify-center text-yellow-400 font-black text-xl">
-                    ↻
+                    {isClockwise ? '↻' : '↺'}
                   </div>
                   <div>
                     <h4 className="text-lg font-bold text-white">
-                      Reversed Turn Order
+                      {isClockwise ? 'Clockwise Order' : 'Reversed Turn Order'}
                     </h4>
                     <p className="text-xs text-gray-400">
-                      Active Color: <span className="text-red-400 font-bold uppercase">Red</span>
+                      Active Color:{' '}
+                      <span className="font-bold uppercase text-yellow-400">
+                        {topCard?.color || 'Wild'}
+                      </span>
                     </p>
                   </div>
                 </div>
@@ -476,20 +539,27 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
                     <span className="text-xs font-semibold text-gray-400 mb-2">
                       Top Card
                     </span>
-                    <img
-                      src={getUNOCardImagePath(
-                        (GameData?.currentGameModeData as UNOState)?.topCard || MOCK_TOP_CARD
-                      )}
-                      alt="Top Card"
-                      className="w-24 h-36 rounded-xl shadow-2xl transform hover:scale-105 transition-transform object-contain filter drop-shadow-xl cursor-pointer"
-                    />
+                    {topCard ? (
+                      <img
+                        src={getUNOCardImagePath(topCard)}
+                        alt="Top Card"
+                        className="w-24 h-36 rounded-xl shadow-2xl transform hover:scale-105 transition-transform object-contain filter drop-shadow-xl cursor-pointer"
+                      />
+                    ) : (
+                      <div className="w-24 h-36 rounded-xl border border-dashed border-white/20 flex items-center justify-center text-xs text-gray-500">
+                        No Card
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex flex-col items-center">
                     <span className="text-xs font-semibold text-gray-400 mb-2">
-                      Draw Pile ({(GameData?.currentGameModeData as UNOState)?.drawPile?.length || 104})
+                      Draw Pile ({drawPileCount})
                     </span>
-                    <div className="relative cursor-pointer hover:-translate-y-1 transition-transform group">
+                    <div
+                      onClick={handleDrawCard}
+                      className="relative cursor-pointer hover:-translate-y-1 transition-transform group"
+                    >
                       <div className="absolute top-1 left-1 w-24 h-36 rounded-xl bg-gray-900 border border-white/10 opacity-60 pointer-events-none"></div>
                       <div className="absolute top-0.5 left-0.5 w-24 h-36 rounded-xl bg-gray-800 border border-white/15 opacity-80 pointer-events-none"></div>
                       <img
@@ -502,12 +572,14 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
                 </div>
 
                 <div className="flex flex-col items-end">
-                  <button
-                    onClick={() => setActiveScreen('end')}
-                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-sm font-bold shadow-lg shadow-purple-900/40 transition-all"
-                  >
-                    Next
-                  </button>
+                  {isHost && (
+                    <button
+                      onClick={() => setActiveScreen('end')}
+                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-sm font-bold shadow-lg shadow-purple-900/40 transition-all"
+                    >
+                      End Round →
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -515,60 +587,68 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
             <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-6 shadow-xl">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-base font-bold text-white">
-                  Your Hand ({MOCK_USER_HAND.length} Cards Total)
+                  Your Hand ({userHand.length} Cards Total)
                 </h3>
-                <button className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-red-900/40 animate-pulse">
+                <button
+                  onClick={handleSayUno}
+                  className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-red-900/40 animate-pulse"
+                >
                   Say UNO!
                 </button>
               </div>
 
-              <div className="flex flex-wrap items-end gap-6 pt-4 pb-2">
-                {groupedUserHand.map((group) => {
-                  const stackCount = group.cards.length;
-                  const offsetPx = 14;
-                  const baseWidth = 84;
-                  const baseHeight = 124;
-                  const totalWidth = baseWidth + (stackCount - 1) * offsetPx;
-                  const totalHeight = baseHeight + (stackCount - 1) * offsetPx;
+              {userHand.length > 0 ? (
+                <div className="flex flex-wrap items-end gap-6 pt-4 pb-2">
+                  {groupedUserHand.map((group) => {
+                    const stackCount = group.cards.length;
+                    const offsetPx = 14;
+                    const baseWidth = 84;
+                    const baseHeight = 124;
+                    const totalWidth = baseWidth + (stackCount - 1) * offsetPx;
+                    const totalHeight = baseHeight + (stackCount - 1) * offsetPx;
 
-                  return (
-                    <div
-                      key={group.key}
-                      className="relative transition-transform hover:-translate-y-2 cursor-pointer select-none group"
-                      style={{
-                        width: `${totalWidth}px`,
-                        height: `${totalHeight}px`,
-                      }}
-                    >
-                      {group.cards.map((card, idx) => {
-                        const isTopCard = idx === stackCount - 1;
-                        return (
-                          <div
-                            key={card.id || idx}
-                            className="absolute w-20 h-28 transform transition-transform filter drop-shadow-md"
-                            style={{
-                              top: `${idx * offsetPx}px`,
-                              left: `${idx * offsetPx}px`,
-                              zIndex: idx + 1,
-                            }}
-                          >
-                            <img
-                              src={getUNOCardImagePath(card)}
-                              alt={`${card.color} ${card.value}`}
-                              className="w-full h-full object-contain pointer-events-none rounded-lg"
-                            />
-                            {isTopCard && stackCount > 1 && (
-                              <span className="absolute -top-2 -right-2 bg-yellow-400 text-gray-950 text-xs font-black px-2 py-0.5 rounded-full shadow-lg border border-yellow-300 z-20">
-                                ×{stackCount}
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
+                    return (
+                      <div
+                        key={group.key}
+                        onClick={() => group.cards[0]?.id && handlePlayCard(group.cards[0].id)}
+                        className="relative transition-transform hover:-translate-y-2 cursor-pointer select-none group"
+                        style={{
+                          width: `${totalWidth}px`,
+                          height: `${totalHeight}px`,
+                        }}
+                      >
+                        {group.cards.map((card, idx) => {
+                          const isTopCard = idx === stackCount - 1;
+                          return (
+                            <div
+                              key={card.id || idx}
+                              className="absolute w-20 h-28 transform transition-transform filter drop-shadow-md"
+                              style={{
+                                top: `${idx * offsetPx}px`,
+                                left: `${idx * offsetPx}px`,
+                                zIndex: idx + 1,
+                              }}
+                            >
+                              <img
+                                src={getUNOCardImagePath(card)}
+                                alt={`${card.color} ${card.value}`}
+                                className="w-full h-full object-contain pointer-events-none rounded-lg"
+                              />
+                              {isTopCard && stackCount > 1 && (
+                                <span className="absolute -top-2 -right-2 bg-yellow-400 text-gray-950 text-xs font-black px-2 py-0.5 rounded-full shadow-lg border border-yellow-300 z-20">
+                                  ×{stackCount}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400 py-4">No cards in your hand.</p>
+              )}
             </div>
           </div>
         )}
@@ -580,7 +660,7 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
                 Round Finished
               </span>
               <h2 className="text-3xl sm:text-4xl font-black text-white mb-2">
-                Winner: <span className="text-yellow-400">Alice</span>!
+                Winner: <span className="text-yellow-400">{winnerName}</span>!
               </h2>
             </div>
 
@@ -593,8 +673,6 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
                   <h3 className="text-xl font-bold text-white mb-2">
                     Start a New Round
                   </h3>
-                  <p className="text-sm text-gray-400 mb-6">
-                  </p>
                 </div>
                 <button
                   onClick={() => setActiveScreen('lobby')}
@@ -612,8 +690,6 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
                   <h3 className="text-xl font-bold text-white mb-2">
                     Go to Next Gamemode
                   </h3>
-                  <p className="text-sm text-gray-400 mb-6">
-                  </p>
                 </div>
                 <button
                   onClick={() => nextGameMode()}
@@ -633,56 +709,30 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
                 </div>
                 <div className="px-6 py-6">
                   {GameData?.currentGameModeData?.Scoreboard &&
-                    (GameData.currentGameModeData.Scoreboard as Scoreboard)
-                      .scores?.length > 0 ? (
+                    (GameData.currentGameModeData.Scoreboard as Scoreboard).scores?.length > 0 ? (
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="text-gray-300">
-                          <th className="px-3 py-2 text-left font-medium">
-                            Player
-                          </th>
-                          <th className="px-3 py-2 text-left font-medium">
-                            Score
-                          </th>
+                          <th className="px-3 py-2 text-left font-medium">Player</th>
+                          <th className="px-3 py-2 text-left font-medium">Score</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {(
-                          GameData.currentGameModeData.Scoreboard as Scoreboard
-                        ).scores.map((score: Score) => (
-                          <tr
-                            key={score.playerId}
-                            className="border-t border-white/10 hover:bg-white/5"
-                          >
-                            <td className="px-3 py-2 flex items-center gap-3">
-                              <img
-                                src={getUserAvatar(score.playerId)}
-                                alt={`${score.playerName}'s avatar`}
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                  const textSpan = document.createElement(
-                                    'span'
-                                  );
-                                  textSpan.textContent = score.playerName
-                                    .charAt(0)
-                                    .toUpperCase();
-                                  textSpan.className =
-                                    'text-lg font-bold text-white bg-clip-text text-transparent bg-gradient-to-r from-red-400 via-yellow-400 to-blue-400 border border-white/20 px-1 rounded-full w-8 h-8 flex items-center justify-center';
-                                  e.currentTarget.parentElement?.appendChild(
-                                    textSpan
-                                  );
-                                }}
-                                className="h-8 w-8 rounded-full object-cover"
-                              />
-                              <span className="font-medium text-white">
-                                {score.playerName}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 text-gray-200">
-                              {score.score}
-                            </td>
-                          </tr>
-                        ))}
+                        {(GameData.currentGameModeData.Scoreboard as Scoreboard).scores.map(
+                          (score: Score) => (
+                            <tr key={score.playerId} className="border-t border-white/10 hover:bg-white/5">
+                              <td className="px-3 py-2 flex items-center gap-3">
+                                <img
+                                  src={getUserAvatar(score.playerId)}
+                                  alt={`${score.playerName}'s avatar`}
+                                  className="h-8 w-8 rounded-full object-cover"
+                                />
+                                <span className="font-medium text-white">{score.playerName}</span>
+                              </td>
+                              <td className="px-3 py-2 text-gray-200">{score.score}</td>
+                            </tr>
+                          )
+                        )}
                       </tbody>
                     </table>
                   ) : (
@@ -705,51 +755,24 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="text-gray-300">
-                          <th className="px-3 py-2 text-left font-medium">
-                            Player
-                          </th>
-                          <th className="px-3 py-2 text-left font-medium">
-                            Score
-                          </th>
+                          <th className="px-3 py-2 text-left font-medium">Player</th>
+                          <th className="px-3 py-2 text-left font-medium">Score</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {(GameData.Scoreboard as Scoreboard).scores.map(
-                          (score: Score) => (
-                            <tr
-                              key={score.playerId}
-                              className="border-t border-white/10 hover:bg-white/5"
-                            >
-                              <td className="px-3 py-2 flex items-center gap-3">
-                                <img
-                                  src={getUserAvatar(score.playerId)}
-                                  alt={`${score.playerName}'s avatar`}
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = 'none';
-                                    const textSpan = document.createElement(
-                                      'span'
-                                    );
-                                    textSpan.textContent = score.playerName
-                                      .charAt(0)
-                                      .toUpperCase();
-                                    textSpan.className =
-                                      'text-lg font-bold text-white bg-clip-text text-transparent bg-gradient-to-r from-red-400 via-yellow-400 to-blue-400 border border-white/20 px-1 rounded-full w-8 h-8 flex items-center justify-center';
-                                    e.currentTarget.parentElement?.appendChild(
-                                      textSpan
-                                    );
-                                  }}
-                                  className="h-8 w-8 rounded-full object-cover"
-                                />
-                                <span className="font-medium text-white">
-                                  {score.playerName}
-                                </span>
-                              </td>
-                              <td className="px-3 py-2 text-gray-200">
-                                {score.score}
-                              </td>
-                            </tr>
-                          )
-                        )}
+                        {(GameData.Scoreboard as Scoreboard).scores.map((score: Score) => (
+                          <tr key={score.playerId} className="border-t border-white/10 hover:bg-white/5">
+                            <td className="px-3 py-2 flex items-center gap-3">
+                              <img
+                                src={getUserAvatar(score.playerId)}
+                                alt={`${score.playerName}'s avatar`}
+                                className="h-8 w-8 rounded-full object-cover"
+                              />
+                              <span className="font-medium text-white">{score.playerName}</span>
+                            </td>
+                            <td className="px-3 py-2 text-gray-200">{score.score}</td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   ) : (

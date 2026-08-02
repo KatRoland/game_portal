@@ -9,7 +9,7 @@ import MusicQuiz from '@/components/games/musicquiz';
 import BTN from '@/components/games/BTN';
 import CrossGame from '@/components/games/CrossGame';
 import EndGame from '@/components/games/EndGame';
-import { GameQuestion, Game, Score, Scoreboard, GameFN, MQFN, KSFN, Karaoke_Solo, KaraokeVote, KDFN, SOP_FN, SOPPL_FN, SOPPLItem } from '@/types';
+import { GameQuestion, Game, Score, Scoreboard, GameFN, MQFN, KSFN, Karaoke_Solo, KaraokeVote, KDFN, SOP_FN, SOPPL_FN, SOPPLItem, UNO_FN, UNOGameRules } from '@/types';
 import KaraokeSolo from '@/components/games/karaokesolo';
 import KaraokeDuett from '@/components/games/karaokeduett';
 import SmashOrPass from '@/components/games/SmashOrPass';
@@ -176,6 +176,13 @@ export default function GamePage() {
     setPlaylist: (items: SOPPLItem[]) => { console.warn('Use admin to set playlist'); },
     next: () => { wsRef.current?.send({ type: 'soppl:next', payload: { gameId: id } }) },
     vote: (value: 1 | -1) => { wsRef.current?.send({ type: 'soppl:vote', payload: { gameId: id, value } }) },
+  }
+
+  const UNOFN: UNO_FN = {
+    start: (rules: UNOGameRules) => { wsRef.current?.send({ type: 'uno:start_round', payload: { gameId: id, rules } }) },
+    playCard: (cardId: string) => { wsRef.current?.send({ type: 'uno:play_card', payload: { gameId: id, cardId } }) },
+    drawCard: () => { wsRef.current?.send({ type: 'uno:draw_card', payload: { gameId: id } }) },
+    sayUno: () => { wsRef.current?.send({ type: 'uno:say_uno', payload: { gameId: id } }) },
   }
 
   useEffect(() => {
@@ -450,12 +457,41 @@ export default function GamePage() {
 
       }
 
+      const declareUNOListeners = () => {
+        wsRef.current?.on('uno:update_gamedata', (payload: { game: Game }) => {
+          setGameData(payload.game)
+        })
+
+        wsRef.current?.on('uno:error', (payload: { message: string }) => {
+          setGameData((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              currentGameModeData: {
+                ...prev.currentGameModeData,
+                error: payload.message
+              }
+            };
+          });
+        })
+
+        wsRef.current?.on('uno:round_started', (payload: any) => {
+          console.log(`[UNO] received uno:round_started`);
+          console.log(payload)
+          setGameData((prev) => {
+            if (!prev) return prev;
+            return { ...prev, currentGameModeData: payload.unoData };
+          });
+        })
+      }
+
       loadFN();
       declareGAMEListeners();
       declareMQListeners();
       declareQAListeners();
       declareKSListeners();
       declareKDListeners();
+      declareUNOListeners();
       wsRef.current?.on('sop:update_submissions', (payload: any) => {
         setGameData((prev) => {
           if (!prev) return prev;
@@ -536,7 +572,7 @@ export default function GamePage() {
           )
         case 'UNO':
           return (
-            <UNO isHost={isHost} GameFN={GameFN} GameData={gameData} />
+            <UNO isHost={isHost} GameFN={GameFN} UNOFN={UNOFN} GameData={gameData} />
           );
         case 'Cross':
           return (
