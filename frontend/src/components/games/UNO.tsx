@@ -10,19 +10,21 @@ import {
   UNOCard,
   UNOCardInHand,
   UNOState,
+  UNOPhaseData,
   GameMode,
   UNO_FN,
 } from '@/types';
 import { getUserAvatar } from '@/lib/api';
 import { getUNOCardImagePath, getUNOCardBackPath } from '@/lib/unoCardHelper';
 import { useUser } from '@/contexts/UserContext';
-import { getWSClient } from '@/lib/ws';
 
 interface UNOProps {
   GameData: Game | null;
   GameFN: GameFN;
   isHost: boolean;
   UNOFN: UNO_FN;
+  error: { notificationLevel: string; message: string } | null;
+  clearError: () => void;
 }
 
 const DEFAULT_RULES: UNOGameRules = {
@@ -116,7 +118,7 @@ function OtherPlayerHandDisplay({
   );
 }
 
-export default function UNO({ GameData, GameFN, isHost, UNOFN }: UNOProps) {
+export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError }: UNOProps) {
   const { endGame, endGameMode, nextGameMode } = GameFN;
   const { user } = useUser();
   const currentUserId = user?.id ? String(user.id) : null;
@@ -125,6 +127,12 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN }: UNOProps) {
 
   const [activeScreen, setActiveScreen] = useState<'lobby' | 'gameplay' | 'end'>('lobby');
   const [rules, setRules] = useState<UNOGameRules>(() => unoState?.gameRules || DEFAULT_RULES);
+
+  useEffect(() => {
+    if (!error) return;
+    const timer = setTimeout(() => clearError(), 4000);
+    return () => clearTimeout(timer);
+  }, [error, clearError]);
 
   useEffect(() => {
     if (unoState?.gameRules) {
@@ -215,34 +223,45 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN }: UNOProps) {
   const winnerName = winnerId && playersMap[winnerId] ? playersMap[winnerId].name : 'Winner';
 
   const handlePlayCard = (cardId: string) => {
-    if (GameData?.id) {
-      getWSClient()?.send({
-        type: 'uno:play_card',
-        payload: { gameId: GameData.id, cardId },
-      });
-    }
+    UNOFN.playCard(cardId);
   };
 
   const handleDrawCard = () => {
-    if (GameData?.id) {
-      getWSClient()?.send({
-        type: 'uno:draw_card',
-        payload: { gameId: GameData.id },
-      });
-    }
+    UNOFN.drawCard();
   };
 
   const handleSayUno = () => {
-    if (GameData?.id) {
-      getWSClient()?.send({
-        type: 'uno:say_uno',
-        payload: { gameId: GameData.id },
-      });
-    }
+    UNOFN.sayUno();
   };
+
+  const handleChooseColor = (color: 'red' | 'green' | 'blue' | 'yellow') => {
+    UNOFN.chooseColor(color);
+  };
+
+  const isMyTurn = currentUserId === unoState?.currentTurnPlayerId;
+  const currentPhase = unoState?.state?.activePhaseData?.phase;
+  const showColorPicker = currentPhase === 'choose_color' && isMyTurn;
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100">
+      {/* Error Toast */}
+      {error && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[60] animate-fadeIn">
+          <div className="flex items-center gap-3 px-5 py-3 rounded-2xl border border-red-500/40 bg-red-950/90 backdrop-blur-xl shadow-2xl shadow-red-900/30">
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-red-400">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <span className="text-sm font-semibold text-red-200">{error.message.replace(/_/g, ' ')}</span>
+            <button onClick={clearError} className="ml-2 text-red-400 hover:text-red-300 transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
       <div className="mx-auto max-w-6xl px-6 py-8">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-6 border-b border-white/10">
           <div className="flex items-center gap-4">
@@ -495,6 +514,46 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN }: UNOProps) {
 
         {activeScreen === 'gameplay' && (
           <div className="space-y-8 animate-fadeIn">
+            {/* Color Picker Modal for Wild / Draw4 */}
+            {showColorPicker && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn">
+                <div className="rounded-3xl border border-white/20 bg-gray-900/95 backdrop-blur-xl p-8 shadow-2xl max-w-md w-full mx-4">
+                  <h3 className="text-xl font-bold text-white text-center mb-2">
+                    Choose a Color
+                  </h3>
+                  <p className="text-sm text-gray-400 text-center mb-6">
+                    {(unoState?.state?.activePhaseData as any)?.pendingCard?.type === 'draw4'
+                      ? 'Next player will draw 4 cards!'
+                      : 'Pick the color for the wild card'}
+                  </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    {[
+                      { color: 'red' as const, bg: 'from-red-600 to-red-700', hover: 'hover:from-red-500 hover:to-red-600', shadow: 'shadow-red-900/50', label: 'Red' },
+                      { color: 'blue' as const, bg: 'from-blue-600 to-blue-700', hover: 'hover:from-blue-500 hover:to-blue-600', shadow: 'shadow-blue-900/50', label: 'Blue' },
+                      { color: 'green' as const, bg: 'from-green-600 to-green-700', hover: 'hover:from-green-500 hover:to-green-600', shadow: 'shadow-green-900/50', label: 'Green' },
+                      { color: 'yellow' as const, bg: 'from-yellow-500 to-yellow-600', hover: 'hover:from-yellow-400 hover:to-yellow-500', shadow: 'shadow-yellow-900/50', label: 'Yellow' },
+                    ].map(({ color, bg, hover, shadow, label }) => (
+                      <button
+                        key={color}
+                        onClick={() => handleChooseColor(color)}
+                        className={`py-6 rounded-2xl bg-gradient-to-br ${bg} ${hover} text-white font-black text-lg uppercase tracking-wider shadow-lg ${shadow} transition-all active:scale-95 hover:scale-105`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Turn Indicator */}
+            <div className={`rounded-2xl border p-4 text-center font-bold text-sm transition-all ${isMyTurn
+                ? 'border-yellow-400/60 bg-yellow-500/10 text-yellow-300 shadow-lg shadow-yellow-500/10'
+                : 'border-white/10 bg-white/5 text-gray-400'
+              }`}>
+              {isMyTurn ? '🎯 Your Turn — Play a card or draw!' : `⏳ Waiting for ${unoState?.players?.[unoState?.currentTurnPlayerId]?.name || 'other player'}...`}
+            </div>
+
             <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-6 shadow-xl">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-base font-semibold text-white">

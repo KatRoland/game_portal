@@ -33,6 +33,7 @@ export default function GamePage() {
   const [autoPlay, setAutoPlay] = useState(false)
   const [userRecordToPlay, setUserRecordToPlay] = useState<number | null>(null)
   const [playFinal, setPlayFinal] = useState<boolean>(false)
+  const [unoError, setUnoError] = useState<{ notificationLevel: string; message: string } | null>(null)
 
   const GameFN: GameFN = {
     incrementScore: (playerId: string, increment: number = 1) => {
@@ -183,6 +184,7 @@ export default function GamePage() {
     playCard: (cardId: string) => { wsRef.current?.send({ type: 'uno:play_card', payload: { gameId: id, cardId } }) },
     drawCard: () => { wsRef.current?.send({ type: 'uno:draw_card', payload: { gameId: id } }) },
     sayUno: () => { wsRef.current?.send({ type: 'uno:say_uno', payload: { gameId: id } }) },
+    chooseColor: (color: 'red' | 'green' | 'blue' | 'yellow') => { wsRef.current?.send({ type: 'uno:choose_color', payload: { gameId: id, color } }) },
   }
 
   useEffect(() => {
@@ -462,21 +464,21 @@ export default function GamePage() {
           setGameData(payload.game)
         })
 
-        wsRef.current?.on('uno:error', (payload: { message: string }) => {
-          setGameData((prev) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              currentGameModeData: {
-                ...prev.currentGameModeData,
-                error: payload.message
-              }
-            };
-          });
+        wsRef.current?.on('uno:error', (payload: { notificationLevel: string; message: string }) => {
+          setUnoError(payload)
         })
 
         wsRef.current?.on('uno:round_started', (payload: any) => {
           console.log(`[UNO] received uno:round_started`);
+          console.log(payload)
+          setGameData((prev) => {
+            if (!prev) return prev;
+            return { ...prev, currentGameModeData: payload.unoData };
+          });
+        })
+
+        wsRef.current?.on('uno:card_played', (payload: any) => {
+          console.log(`[UNO] received uno:card_played`);
           console.log(payload)
           setGameData((prev) => {
             if (!prev) return prev;
@@ -572,7 +574,7 @@ export default function GamePage() {
           )
         case 'UNO':
           return (
-            <UNO isHost={isHost} GameFN={GameFN} UNOFN={UNOFN} GameData={gameData} />
+            <UNO isHost={isHost} GameFN={GameFN} UNOFN={UNOFN} GameData={gameData} error={unoError} clearError={() => setUnoError(null)} />
           );
         case 'Cross':
           return (

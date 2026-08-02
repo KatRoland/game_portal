@@ -98,3 +98,13 @@ export function generateStartHand(rules: GameRules, deck: UNOCard[]): [UNOCardIn
 
     return [cardsDealt, deckCopy];
 }
+
+export function isValidCard(card: UNOCard, topCard: UNOCard | null): boolean {
+    console.log(`card: ${JSON.stringify(card)}, topCard: ${JSON.stringify(topCard)}`)
+    if (!topCard) return true;
+    if (card.color === "wild" || card.type === "wild" || card.type === "draw4") return true;
+    if (card.color === topCard.color) return true;
+    if (card.value === topCard.value) return true;
+    if (card.type === topCard.type && card.type != "number") return true;
+    return false;
+}
