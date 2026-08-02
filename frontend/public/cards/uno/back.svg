@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 360" width="240" height="360">
+  
+    <defs>
+      <linearGradient id="red-grad-back" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#FF3B5C"/>
+        <stop offset="100%" stop-color="#C4001E"/>
+      </linearGradient>
+      <linearGradient id="green-grad-back" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#10B981"/>
+        <stop offset="100%" stop-color="#046C4E"/>
+      </linearGradient>
+      <linearGradient id="blue-grad-back" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#3B82F6"/>
+        <stop offset="100%" stop-color="#1E40AF"/>
+      </linearGradient>
+      <linearGradient id="yellow-grad-back" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#FBBF24"/>
+        <stop offset="100%" stop-color="#D97706"/>
+      </linearGradient>
+      <linearGradient id="wild-grad-back" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#2E2640"/>
+        <stop offset="100%" stop-color="#110E1C"/>
+      </linearGradient>
+      <linearGradient id="oval-grad-back" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#FFFFFF"/>
+        <stop offset="100%" stop-color="#F3F4F6"/>
+      </linearGradient>
+      <linearGradient id="gold-grad-back" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#FFE259"/>
+        <stop offset="100%" stop-color="#FFA751"/>
+      </linearGradient>
+      <filter id="card-shadow-back" x="-10%" y="-10%" width="130%" height="130%">
+        <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#000000" flood-opacity="0.35"/>
+      </filter>
+      <filter id="oval-shadow-back" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.25"/>
+      </filter>
+      <filter id="text-shadow-back" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="2" dy="4" stdDeviation="2" flood-color="#000000" flood-opacity="0.2"/>
+      </filter>
+    </defs>
+  
+  <!-- Outer Card Frame (Dark Premium Finish) -->
+  <rect x="6" y="6" width="228" height="348" rx="22" ry="22" fill="url(#wild-grad-back)" stroke="#FFFFFF" stroke-width="5" filter="url(#card-shadow-back)"/>
+  <rect x="14" y="14" width="212" height="332" rx="16" ry="16" fill="none" stroke="url(#gold-grad-back)" stroke-width="2.5"/>
+
+  <!-- Geometric Back Pattern -->
+  <g opacity="0.15">
+    <circle cx="120" cy="180" r="130" fill="none" stroke="#FFFFFF" stroke-width="12" stroke-dasharray="8 8"/>
+    <circle cx="120" cy="180" r="100" fill="none" stroke="#FFFFFF" stroke-width="6"/>
+  </g>
+
+  <!-- Central Red Oval with Gold Outer Trim -->
+  <g filter="url(#oval-shadow-back)">
+    <ellipse cx="120" cy="180" rx="80" ry="118" transform="rotate(-25 120 180)" fill="url(#gold-grad-back)"/>
+    <ellipse cx="120" cy="180" rx="74" ry="110" transform="rotate(-25 120 180)" fill="url(#red-grad-back)"/>
+  </g>
+
+  <!-- Bold Angled UNO Logo Text -->
+  <g transform="translate(120, 180) rotate(-25)">
+    <!-- 3D Shadow for Text -->
+    <text x="4" y="18" text-anchor="middle" dominant-baseline="central" font-size="76" font-weight="900" font-family="'Arial Black', sans-serif" fill="#7A000E" opacity="0.8">UNO</text>
+    <!-- Main Yellow Text with Black/Gold Outline -->
+    <text x="0" y="14" text-anchor="middle" dominant-baseline="central" font-size="76" font-weight="900" font-family="'Arial Black', sans-serif" fill="url(#gold-grad-back)" stroke="#000000" stroke-width="6" paint-order="stroke fill" filter="url(#text-shadow-back)">UNO</text>
+  </g>
+
+  <!-- Small corner accents -->
+  <g transform="translate(26, 36)">
+    <ellipse cx="0" cy="0" rx="8" ry="12" transform="rotate(-25)" fill="url(#red-grad-back)" stroke="url(#gold-grad-back)" stroke-width="1.5"/>
+  </g>
+  <g transform="translate(214, 324)">
+    <ellipse cx="0" cy="0" rx="8" ry="12" transform="rotate(-25)" fill="url(#red-grad-back)" stroke="url(#gold-grad-back)" stroke-width="1.5"/>
+  </g>
+</svg>

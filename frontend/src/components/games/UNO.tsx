@@ -7,10 +7,12 @@ import {
   Score,
   Scoreboard,
   UNOGameRules,
+  UNOCard,
   UNOCardInHand,
   UNOState,
 } from '@/types';
 import { getUserAvatar } from '@/lib/api';
+import { getUNOCardImagePath, getUNOCardBackPath } from '@/lib/unoCardHelper';
 
 interface UNOProps {
   GameData: Game | null;
@@ -47,21 +49,7 @@ const MOCK_USER_HAND: UNOCardInHand[] = [
   { id: 'c8', color: 'wild', type: 'draw4', value: 'draw4' },
 ];
 
-function getCardColorClass(color: string) {
-  switch (color) {
-    case 'red':
-      return 'bg-gradient-to-br from-red-600 to-red-800 border-red-400 text-white';
-    case 'yellow':
-      return 'bg-gradient-to-br from-amber-500 to-yellow-600 border-yellow-300 text-gray-950';
-    case 'green':
-      return 'bg-gradient-to-br from-emerald-600 to-green-800 border-green-400 text-white';
-    case 'blue':
-      return 'bg-gradient-to-br from-blue-600 to-indigo-800 border-blue-400 text-white';
-    case 'wild':
-    default:
-      return 'bg-gradient-to-br from-purple-600 via-pink-600 to-indigo-700 border-pink-400 text-white';
-  }
-}
+const MOCK_TOP_CARD: UNOCard = { color: 'red', type: 'number', value: 7 };
 
 function groupHandCards(cards: UNOCardInHand[]) {
   const groups: { key: string; cards: UNOCardInHand[] }[] = [];
@@ -95,10 +83,11 @@ function OtherPlayerHandDisplay({
 
   return (
     <div
-      className={`flex flex-col items-center p-4 rounded-2xl border transition-all ${isTurn
-        ? 'border-yellow-400/80 bg-yellow-500/10 shadow-lg shadow-yellow-500/20 scale-105'
-        : 'border-white/10 bg-white/5'
-        }`}
+      className={`flex flex-col items-center p-4 rounded-2xl border transition-all ${
+        isTurn
+          ? 'border-yellow-400/80 bg-yellow-500/10 shadow-lg shadow-yellow-500/20 scale-105'
+          : 'border-white/10 bg-white/5'
+      }`}
     >
       <div className="flex items-center gap-2 mb-3">
         <span className="font-bold text-white text-sm">{playerName}</span>
@@ -115,20 +104,16 @@ function OtherPlayerHandDisplay({
       </div>
 
       <div className="flex items-center">
-        <div className="flex items-center -space-x-3">
+        <div className="flex items-center -space-x-4">
           {Array.from({ length: visibleCards }).map((_, i) => (
-            <div
+            <img
               key={i}
-              className="w-10 h-14 rounded-lg bg-gradient-to-br from-red-600 via-gray-900 to-black border border-red-400/50 shadow-md flex items-center justify-center transform hover:-translate-y-1 transition-transform"
+              src={getUNOCardBackPath()}
+              alt="UNO Card Back"
+              className="w-10 h-14 rounded-lg shadow-md transform hover:-translate-y-1 transition-transform object-contain pointer-events-none filter drop-shadow"
               style={{ zIndex: i + 1 }}
               title={`Card ${i + 1} of ${cardCount}`}
-            >
-              <div className="w-6 h-9 rounded-full border border-yellow-400/40 bg-red-500/20 flex items-center justify-center transform -rotate-12">
-                <span className="text-[7px] font-black text-yellow-300 tracking-tighter">
-                  UNO
-                </span>
-              </div>
-            </div>
+            />
           ))}
         </div>
 
@@ -491,26 +476,27 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
                     <span className="text-xs font-semibold text-gray-400 mb-2">
                       Top Card
                     </span>
-                    <div className="w-24 h-36 rounded-2xl bg-gradient-to-br from-red-600 to-red-800 border-2 border-red-300 shadow-2xl flex flex-col items-center justify-center transform hover:scale-105 transition-transform">
-                      <span className="text-4xl font-black text-white drop-shadow">
-                        7
-                      </span>
-                      <span className="text-xs uppercase font-extrabold text-red-200 mt-1">
-                        Red
-                      </span>
-                    </div>
+                    <img
+                      src={getUNOCardImagePath(
+                        (GameData?.currentGameModeData as UNOState)?.topCard || MOCK_TOP_CARD
+                      )}
+                      alt="Top Card"
+                      className="w-24 h-36 rounded-xl shadow-2xl transform hover:scale-105 transition-transform object-contain filter drop-shadow-xl cursor-pointer"
+                    />
                   </div>
 
                   <div className="flex flex-col items-center">
                     <span className="text-xs font-semibold text-gray-400 mb-2">
-                      Draw Pile (104)
+                      Draw Pile ({(GameData?.currentGameModeData as UNOState)?.drawPile?.length || 104})
                     </span>
-                    <div className="w-24 h-36 rounded-2xl bg-gradient-to-br from-red-600 via-gray-900 to-black border-2 border-red-500/50 shadow-2xl flex items-center justify-center cursor-pointer hover:-translate-y-1 transition-transform group">
-                      <div className="w-14 h-20 rounded-full border-2 border-yellow-400/50 bg-red-600/30 flex items-center justify-center transform -rotate-12 group-hover:rotate-0 transition-transform">
-                        <span className="text-base font-black text-yellow-300 tracking-tighter">
-                          UNO
-                        </span>
-                      </div>
+                    <div className="relative cursor-pointer hover:-translate-y-1 transition-transform group">
+                      <div className="absolute top-1 left-1 w-24 h-36 rounded-xl bg-gray-900 border border-white/10 opacity-60 pointer-events-none"></div>
+                      <div className="absolute top-0.5 left-0.5 w-24 h-36 rounded-xl bg-gray-800 border border-white/15 opacity-80 pointer-events-none"></div>
+                      <img
+                        src={getUNOCardBackPath()}
+                        alt="Draw Pile"
+                        className="relative w-24 h-36 rounded-xl shadow-2xl object-contain filter drop-shadow-xl hover:brightness-110 active:scale-95 transition-all"
+                      />
                     </div>
                   </div>
                 </div>
@@ -548,7 +534,7 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
                   return (
                     <div
                       key={group.key}
-                      className="relative transition-transform hover:-translate-y-2 cursor-pointer select-none"
+                      className="relative transition-transform hover:-translate-y-2 cursor-pointer select-none group"
                       style={{
                         width: `${totalWidth}px`,
                         height: `${totalHeight}px`,
@@ -559,31 +545,20 @@ export default function UNO({ GameData, GameFN, isHost }: UNOProps) {
                         return (
                           <div
                             key={card.id || idx}
-                            className={`absolute w-20 h-28 rounded-xl border-2 shadow-lg p-2 flex flex-col justify-between ${getCardColorClass(
-                              card.color
-                            )}`}
+                            className="absolute w-20 h-28 transform transition-transform filter drop-shadow-md"
                             style={{
                               top: `${idx * offsetPx}px`,
                               left: `${idx * offsetPx}px`,
                               zIndex: idx + 1,
                             }}
                           >
-                            <div className="text-xs font-black leading-none">
-                              {card.value}
-                            </div>
-
-                            {isTopCard && (
-                              <div className="text-center font-black text-xl drop-shadow">
-                                {card.value}
-                              </div>
-                            )}
-
-                            <div className="text-xs font-black text-right leading-none transform rotate-180">
-                              {card.value}
-                            </div>
-
+                            <img
+                              src={getUNOCardImagePath(card)}
+                              alt={`${card.color} ${card.value}`}
+                              className="w-full h-full object-contain pointer-events-none rounded-lg"
+                            />
                             {isTopCard && stackCount > 1 && (
-                              <span className="absolute -top-2 -right-2 bg-white text-gray-950 text-xs font-black px-2 py-0.5 rounded-full shadow-lg border border-gray-300 z-20">
+                              <span className="absolute -top-2 -right-2 bg-yellow-400 text-gray-950 text-xs font-black px-2 py-0.5 rounded-full shadow-lg border border-yellow-300 z-20">
                                 ×{stackCount}
                               </span>
                             )}
