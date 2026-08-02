@@ -12,6 +12,44 @@ function shuffleArray<T>(array: T[]): T[] {
     return arr;
 }
 
+
+function generateCardId(): string {
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function buildUNODeck(): UNOCard[] {
+    const colors: Array<"red" | "green" | "blue" | "yellow"> = ["red", "green", "blue", "yellow"];
+    const deck: UNOCard[] = [];
+
+    for (const color of colors) {
+        // 0
+        deck.push({ type: "number", color, value: 0 });
+        // 1-9
+        for (let n = 1; n <= 9; n++) {
+            deck.push({ type: "number", color, value: n });
+            deck.push({ type: "number", color, value: n });
+        }
+        // skip, reverse, draw2
+        for (let i = 0; i < 2; i++) {
+            deck.push({ type: "skip", color, value: "skip" });
+            deck.push({ type: "reverse", color, value: "reverse" });
+            deck.push({ type: "draw2", color, value: "draw2" });
+        }
+    }
+
+    // wild/four draw4
+    for (let i = 0; i < 4; i++) {
+        deck.push({ type: "wild", color: "wild", value: "wild" });
+        deck.push({ type: "draw4", color: "wild", value: "draw4" });
+    }
+
+    return deck;
+}
+
+function cardToHand(card: UNOCard): UNOCardInHand {
+    return { ...card, id: generateCardId() };
+}
+
 export async function createGameModeData(
     mode: GameMode,
     playlistId: string | number | undefined,
@@ -105,6 +143,79 @@ export async function createGameModeData(
                 Scoreboard: scoreboard
             };
         }
+
+        case GameMode.UNO: {
+            const defaultRules: GameRules = {
+                jumpin: false,
+                canPlayMultipleCards: false,
+                uno: true,
+                unoPenalty: 2,
+                initialCards: 7,
+                deckType: "standard",
+                resetCardsToDraw: true,
+                drawStackingMode: "linear",
+                endCondition: "last_standing"
+            };
+
+            let deck = shuffleArray(buildUNODeck());
+
+            const unoPlayers: { [playerId: string]: UNOPlayer } = {};
+            const playerOrderIds: string[] = [];
+
+            for (const p of players) {
+                const pid = String(p.id);
+                const hand: UNOCardInHand[] = [];
+                for (let i = 0; i < defaultRules.initialCards; i++) {
+                    const card = deck.pop();
+                    if (card) hand.push(cardToHand(card));
+                }
+                unoPlayers[pid] = {
+                    cards: hand,
+                    name: p.username || 'Anonymous',
+                    hasSaidUno: false,
+                    stillPlaying: true,
+                };
+                playerOrderIds.push(pid);
+            }
+
+            let topCard: UNOCard | undefined;
+            const backLog: UNOCard[] = [];
+            while (deck.length > 0) {
+                const candidate = deck.pop()!;
+                if (candidate.type === "wild" || candidate.type === "draw4") {
+                    backLog.push(candidate);
+                } else {
+                    topCard = candidate;
+                    break;
+                }
+            }
+
+            if (!topCard) {
+                deck = shuffleArray([...backLog]);
+                backLog.length = 0;
+                topCard = deck.pop()!;
+            }
+
+            const unoState: UNO = {
+                currentTurnPlayerId: playerOrderIds[0],
+                playerOrderIds: shuffleArray(playerOrderIds),
+                topCard,
+                drawPile: deck,
+                backLog,
+                players: unoPlayers,
+                playersWhoOut: [],
+                Scoreboard: scoreboard,
+                gameRules: defaultRules,
+                state: {
+                    direction: 1,
+                    activePhase: "play",
+                    activePhaseData: { phase: "play" },
+                }
+            };
+
+            return unoState;
+        }
+
 
         default:
             return null;
