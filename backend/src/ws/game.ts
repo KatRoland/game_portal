@@ -380,16 +380,31 @@ export class GameServer {
     if (!info) return;
     this.clients.delete(id);
 
-    // BIZTONSÁGI GARBAGE COLLECTION: Ha elszáll a host, takarítjuk az elárvult lobbit a RAM-ból
     const userId = info.user?.id;
     if (userId) {
-      this.games.forEach((game) => {
-        if (game.lobby?.host?.id === userId) {
-          console.log(`[Garbage Collection] Host disconnected. Purging orphaned lobby: ${game.id}`);
-          this.broadcastToLobby(game.id, { type: "game:error", message: "host_disconnected" });
-          this.removeGame(game.id);
+      const hostedGames = this.games.filter((game) => game.lobby?.host?.id === userId);
+      if (hostedGames.length > 0) {
+        const isStillConnected = Array.from(this.clients.values()).some((c) => c.user?.id === userId);
+        if (!isStillConnected) {
+          console.log(`[Garbage Collection] Host (${userId}) disconnected. Waiting 10s grace period before purging...`);
+          setTimeout(() => {
+            const reconnected = Array.from(this.clients.values()).some((c) => c.user?.id === userId);
+            if (reconnected) {
+              console.log(`[Garbage Collection] Host (${userId}) reconnected within 10s grace period. Preserving lobby.`);
+              return;
+            }
+
+            hostedGames.forEach((game) => {
+              const currentGame = this.games.find((g) => g.id === game.id);
+              if (currentGame && currentGame.lobby?.host?.id === userId) {
+                console.log(`[Garbage Collection] Host disconnected for >10s. Purging orphaned lobby: ${currentGame.id}`);
+                this.broadcastToLobby(currentGame.id, { type: "game:error", message: "host_disconnected" });
+                this.removeGame(currentGame.id);
+              }
+            });
+          }, 10000);
         }
-      });
+      }
     }
 
     this.broadcast({ type: "user_left", payload: { id, name: info.name ?? null } });
