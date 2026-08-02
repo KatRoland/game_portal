@@ -26,7 +26,7 @@ class LobbyServer {
 
     if (!accessToken) {
       console.log(`WS connection rejected (no token): ${id}`);
-      ws.close(1008, "Token required");
+      ws.close(4001, "Token required");
       return;
     }
 
@@ -46,9 +46,10 @@ class LobbyServer {
       info.user = { id: String(dbUser.id), username: dbUser.username ?? null, avatar: dbUser.avatar ?? null, isAdmin: (dbUser as any).isAdmin ?? false };
       info.name = dbUser.username ?? info.name;
 
-    } catch (err) {
+    } catch (err: any) {
       console.debug("WS token verification failed for client", id, err);
-      ws.close(1008, "Invalid token");
+      const isExpired = err?.name === "TokenExpiredError";
+      ws.close(4001, isExpired ? "token_expired" : "invalid_token");
       return;
     }
 

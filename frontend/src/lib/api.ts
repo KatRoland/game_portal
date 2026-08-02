@@ -1,6 +1,7 @@
 const BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 let accessToken: string | null = null;
+let refreshPromise: Promise<boolean> | null = null;
 
 export async function request(path: string, options: any = {}) {
   const headers = new Headers(options.headers);
@@ -18,10 +19,11 @@ export async function request(path: string, options: any = {}) {
   if (res.status === 401 && path !== '/auth/refresh' && path !== '/auth/logout') {
     const refreshed = await refreshToken();
     if (refreshed && accessToken) {
-      headers.set('Authorization', `Bearer ${accessToken}`);
+      const retryHeaders = new Headers(options.headers);
+      retryHeaders.set('Authorization', `Bearer ${accessToken}`);
       res = await fetch(`${BASE}${path}`, {
         ...options,
-        headers,
+        headers: retryHeaders,
         credentials: 'include'
       });
     }
@@ -50,15 +52,28 @@ export async function handleDiscordCallback(hash?: string): Promise<string | nul
   return accessToken;
 }
 
-export async function refreshToken() {
-  try {
-    const data = await request('/auth/refresh', { method: 'POST' });
-    const newToken = (data as any).accessToken;
-    if (newToken) setAccessToken(newToken);
-    return !!newToken;
-  } catch {
-    return false;
-  }
+export async function refreshToken(): Promise<boolean> {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    try {
+      const data = await request('/auth/refresh', { method: 'POST' });
+      const newToken = (data as any).accessToken;
+      if (newToken) {
+        setAccessToken(newToken);
+        return true;
+      }
+      setAccessToken(null);
+      return false;
+    } catch {
+      setAccessToken(null);
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
 }
 
 export function getDiscordAuthUrl() {

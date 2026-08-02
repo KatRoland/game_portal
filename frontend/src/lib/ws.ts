@@ -15,15 +15,18 @@ export class WSClient {
   private lastActivityAt: number = Date.now();
 
   private messageQueue: WSMessage[] = [];
+  private needTokenRefresh = false;
 
-  constructor(private tokenProvider: () => Promise<string | null>, private page: string) { }
+  constructor(private tokenProvider: (forceRefresh?: boolean) => Promise<string | null>, private page: string) { }
 
   async connect() {
     if (this.ws?.readyState === WebSocket.OPEN) return;
 
     this.setStatus('connecting');
 
-    const token = await this.tokenProvider();
+    const token = await this.tokenProvider(this.needTokenRefresh);
+    this.needTokenRefresh = false;
+
     if (!token) {
       console.error("WS Connect failed: No access token available");
       this.setStatus('disconnected');
@@ -65,10 +68,13 @@ export class WSClient {
       this.startHeartbeat();
     };
 
-    this.ws.onclose = () => {
-      console.log('WebSocket disconnected');
+    this.ws.onclose = (event) => {
+      console.log('WebSocket disconnected', event.code, event.reason);
+      if (event.code === 4001 || event.code === 1008 || (event.reason && (event.reason.includes('token') || event.reason.includes('expired')))) {
+        console.log('WS auth failure detected, will refresh token on reconnect');
+        this.needTokenRefresh = true;
+      }
       this.setStatus('disconnected');
-      this.send({ type: 'close' });
       this.stopHeartbeat();
       this.scheduleReconnect();
     };
@@ -227,9 +233,9 @@ export function createWS(accessToken: string, page: string) {
   if (wsClient) {
     wsClient.disconnect();
   }
-  const provider = async () => {
+  const provider = async (forceRefresh = false) => {
     const { getAccessToken, refreshToken } = require('./api');
-    let token = getAccessToken();
+    let token = forceRefresh ? null : getAccessToken();
     if (!token) {
       await refreshToken();
       token = getAccessToken();

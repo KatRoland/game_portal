@@ -12,7 +12,10 @@ export async function jwtMiddleware(req: Request, res: Response, next: NextFunct
     let payload: any;
     try {
       payload = (jwt as any).verify(token, JWT_SECRET);
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.name === "TokenExpiredError") {
+        (req as any).tokenExpired = true;
+      }
       return next();
     }
 
@@ -34,7 +37,12 @@ export async function jwtMiddleware(req: Request, res: Response, next: NextFunct
 
 
 export const requireAuth = (req: Request, res: Response, next: NextFunction) => {
-  if (!(req as any).user) return res.status(401).json({ error: "unauthenticated" });
+  if (!(req as any).user) {
+    if ((req as any).tokenExpired) {
+      return res.status(401).json({ error: "token_expired" });
+    }
+    return res.status(401).json({ error: "unauthenticated" });
+  }
   next();
 };
 
