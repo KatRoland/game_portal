@@ -17,7 +17,7 @@ export interface UNOCardInHand extends UNOCard {
     id: string;
 }
 
-export type UNOPhase = "draw" | "play" | "choose_color";
+export type UNOPhase = "lobby" | "draw" | "play" | "choose_color";
 
 export interface GameRules {
     jumpin: boolean;
@@ -41,7 +41,7 @@ export type UNOPhaseData =
 export interface UNO {
     currentTurnPlayerId: string;
     playerOrderIds: string[];
-    topCard: UNOCard;
+    topCard: UNOCard | null;
     drawPile: UNOCard[];
     backLog: UNOCard[];
     players: { [playerId: string]: UNOPlayer };

@@ -157,20 +157,13 @@ export async function createGameModeData(
                 endCondition: "last_standing"
             };
 
-            let deck = shuffleArray(buildUNODeck());
-
             const unoPlayers: { [playerId: string]: UNOPlayer } = {};
             const playerOrderIds: string[] = [];
 
             for (const p of players) {
                 const pid = String(p.id);
-                const hand: UNOCardInHand[] = [];
-                for (let i = 0; i < defaultRules.initialCards; i++) {
-                    const card = deck.pop();
-                    if (card) hand.push(cardToHand(card));
-                }
                 unoPlayers[pid] = {
-                    cards: hand,
+                    cards: [],
                     name: p.username || 'Anonymous',
                     hasSaidUno: false,
                     stillPlaying: true,
@@ -178,38 +171,20 @@ export async function createGameModeData(
                 playerOrderIds.push(pid);
             }
 
-            let topCard: UNOCard | undefined;
-            const backLog: UNOCard[] = [];
-            while (deck.length > 0) {
-                const candidate = deck.pop()!;
-                if (candidate.type === "wild" || candidate.type === "draw4") {
-                    backLog.push(candidate);
-                } else {
-                    topCard = candidate;
-                    break;
-                }
-            }
-
-            if (!topCard) {
-                deck = shuffleArray([...backLog]);
-                backLog.length = 0;
-                topCard = deck.pop()!;
-            }
-
             const unoState: UNO = {
-                currentTurnPlayerId: playerOrderIds[0],
-                playerOrderIds: shuffleArray(playerOrderIds),
-                topCard,
-                drawPile: deck,
-                backLog,
+                currentTurnPlayerId: playerOrderIds[0] || "",
+                playerOrderIds: playerOrderIds,
+                topCard: null,
+                drawPile: [],
+                backLog: [],
                 players: unoPlayers,
                 playersWhoOut: [],
                 Scoreboard: scoreboard,
                 gameRules: defaultRules,
                 state: {
                     direction: 1,
-                    activePhase: "play",
-                    activePhaseData: { phase: "play" },
+                    activePhase: "lobby",
+                    activePhaseData: { phase: "lobby" },
                 }
             };
 
@@ -220,4 +195,65 @@ export async function createGameModeData(
         default:
             return null;
     }
+}
+
+export function startUNOMatch(unoState: UNO, players: any[], customRules?: GameRules): UNO {
+    const rules = customRules || unoState.gameRules;
+
+    let deck = shuffleArray(buildUNODeck());
+
+    const unoPlayers: { [playerId: string]: UNOPlayer } = {};
+    const playerOrderIds: string[] = [];
+
+    for (const p of players) {
+        const pid = String(p.id);
+        const hand: UNOCardInHand[] = [];
+        for (let i = 0; i < rules.initialCards; i++) {
+            const card = deck.pop();
+            if (card) hand.push(cardToHand(card));
+        }
+        unoPlayers[pid] = {
+            cards: hand,
+            name: p.username || 'Anonymous',
+            hasSaidUno: false,
+            stillPlaying: true,
+        };
+        playerOrderIds.push(pid);
+    }
+
+    let topCard: UNOCard | null = null;
+    const backLog: UNOCard[] = [];
+    while (deck.length > 0) {
+        const candidate = deck.pop()!;
+        if (candidate.type === "wild" || candidate.type === "draw4") {
+            backLog.push(candidate);
+        } else {
+            topCard = candidate;
+            break;
+        }
+    }
+
+    if (!topCard) {
+        deck = shuffleArray([...backLog]);
+        backLog.length = 0;
+        topCard = deck.pop() || null;
+    }
+
+    const shuffledOrder = shuffleArray(playerOrderIds);
+
+    unoState.gameRules = rules;
+    unoState.playerOrderIds = shuffledOrder;
+    unoState.currentTurnPlayerId = shuffledOrder[0] || "";
+    unoState.topCard = topCard;
+    unoState.drawPile = deck;
+    unoState.backLog = backLog;
+    unoState.players = unoPlayers;
+    unoState.playersWhoOut = [];
+    unoState.state = {
+        direction: 1,
+        activePhase: "play",
+        activePhaseData: { phase: "play" },
+    };
+
+    return unoState;
 }
