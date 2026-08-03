@@ -62,6 +62,58 @@ function drawCards(
     }
 }
 
+function canPlayerCounterDraw(
+    player: UNOPlayer | undefined,
+    drawType: "draw2" | "draw4",
+    topCard: UNOCard | null
+): boolean {
+    if (!player || !player.cards) return false;
+    return player.cards.some(c => {
+        if (drawType === "draw2") {
+            return c.type === "draw2" || c.type === "draw4";
+        } else if (drawType === "draw4") {
+            return c.type === "draw4" || (c.type === "draw2" && topCard && c.color === topCard.color);
+        }
+        return false;
+    });
+}
+
+function applyPendingDrawOrSetPhase(
+    unoData: UNO,
+    targetPlayerId: string,
+    drawType: "draw2" | "draw4"
+): void {
+    const targetPlayer = unoData.players[targetPlayerId];
+    const canCounter = canPlayerCounterDraw(targetPlayer, drawType, unoData.topCard);
+
+    if (canCounter) {
+        unoData.currentTurnPlayerId = targetPlayerId;
+        unoData.state.activePhase = "draw_pending";
+        unoData.state.activePhaseData = {
+            phase: "draw_pending",
+            drawAmount: unoData.drawStack,
+            drawType: drawType
+        };
+    } else {
+        if (targetPlayer) {
+            drawCards(unoData, targetPlayerId, unoData.drawStack);
+            targetPlayer.hasSaidUno = false;
+        }
+        unoData.drawStack = 0;
+
+        const nextAfterDraw = getNextPlayerIndex(
+            targetPlayerId,
+            unoData.playerOrderIds,
+            unoData.state.direction,
+            unoData.players
+        );
+
+        unoData.currentTurnPlayerId = nextAfterDraw;
+        unoData.state.activePhase = "play";
+        unoData.state.activePhaseData = { phase: "play" };
+    }
+}
+
 function broadcastState(ctx: GameModeContext, unoData: UNO): void {
     ctx.game.currentGameModeData = unoData;
     ctx.broadcast({
@@ -245,7 +297,21 @@ export class UnoHandler implements IGameModeHandler {
 
                     if (currentPhase === "draw_pending") {
                         const pendingData = unoData.state.activePhaseData as { phase: "draw_pending"; drawAmount: number; drawType: "draw2" | "draw4" };
-                        if (firstCard.type !== pendingData.drawType) {
+                        let isValidCounter = false;
+
+                        if (pendingData.drawType === "draw2") {
+                            if (firstCard.type === "draw2" || firstCard.type === "draw4") {
+                                isValidCounter = true;
+                            }
+                        } else if (pendingData.drawType === "draw4") {
+                            if (firstCard.type === "draw4") {
+                                isValidCounter = true;
+                            } else if (firstCard.type === "draw2" && unoData.topCard && firstCard.color === unoData.topCard.color) {
+                                isValidCounter = true;
+                            }
+                        }
+
+                        if (!isValidCounter) {
                             ctx.send({ type: "uno:error", payload: { notificationLevel: "modal", message: "must_counter_or_draw" } });
                             return;
                         }
@@ -332,13 +398,7 @@ export class UnoHandler implements IGameModeHandler {
                             });
                         }
 
-                        unoData.currentTurnPlayerId = nextTurnId;
-                        unoData.state.activePhase = "draw_pending";
-                        unoData.state.activePhaseData = {
-                            phase: "draw_pending",
-                            drawAmount: unoData.drawStack,
-                            drawType: "draw2"
-                        };
+                        applyPendingDrawOrSetPhase(unoData, nextTurnId, "draw2");
 
                         broadcastState(ctx, unoData);
                         break;
@@ -492,13 +552,7 @@ export class UnoHandler implements IGameModeHandler {
                             unoData.players
                         );
 
-                        unoData.currentTurnPlayerId = nextTurnId;
-                        unoData.state.activePhase = "draw_pending";
-                        unoData.state.activePhaseData = {
-                            phase: "draw_pending",
-                            drawAmount: unoData.drawStack,
-                            drawType: "draw4"
-                        };
+                        applyPendingDrawOrSetPhase(unoData, nextTurnId, "draw4");
                     } else {
                         const nextTurnId = getNextPlayerIndex(
                             unoData.currentTurnPlayerId,

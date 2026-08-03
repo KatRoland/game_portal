@@ -1024,7 +1024,11 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                   </div>
                   {isDrawPending && isMyTurn && (
                     <p className="text-xs text-gray-300 mt-0.5">
-                      Play a <span className="font-bold text-yellow-300">{drawPendingData?.drawType === 'draw2' ? 'Draw 2' : 'Draw 4'}</span> from your hand to stack, or take the cards.
+                      {drawPendingData?.drawType === 'draw2' ? (
+                        <>Play a <span className="font-bold text-yellow-300">Draw 2</span> or <span className="font-bold text-yellow-300">Draw 4</span> from your hand to stack, or take the cards.</>
+                      ) : (
+                        <>Play a <span className="font-bold text-yellow-300">Draw 4</span> or matching-color <span className="font-bold text-yellow-300">Draw 2</span> to stack, or take the cards.</>
+                      )}
                     </p>
                   )}
                 </div>
