@@ -257,7 +257,25 @@ export class UnoHandler implements IGameModeHandler {
                     }
 
                     const cardIdSet = new Set(cardIds);
+                    const hadCardsBefore = currentPlayer.cards.length;
                     currentPlayer.cards = currentPlayer.cards.filter(c => !cardIdSet.has(c.id));
+
+                    if (
+                        unoData.gameRules.uno &&
+                        hadCardsBefore >= 2 &&
+                        currentPlayer.cards.length === 1 &&
+                        !currentPlayer.hasSaidUno
+                    ) {
+                        const penaltyAmount = unoData.gameRules.unoPenalty || 2;
+                        drawCards(unoData, playerId, penaltyAmount);
+                        currentPlayer.hasSaidUno = false;
+                        ctx.send({
+                            type: "uno:error",
+                            payload: { notificationLevel: "toast", message: `uno_penalty_drew_${penaltyAmount}_cards` }
+                        });
+                    }
+
+                    currentPlayer.hasSaidUno = false;
 
                     if (unoData.topCard) {
                         unoData.backLog.push(unoData.topCard);
@@ -517,11 +535,17 @@ export class UnoHandler implements IGameModeHandler {
                         return;
                     }
 
+                    const drawPlayer = unoData.players[String(ctx.userId)];
+
                     if (drawPhase === "draw_pending") {
                         drawCards(unoData, String(ctx.userId), unoData.drawStack);
                         unoData.drawStack = 0;
                     } else {
                         drawCards(unoData, String(ctx.userId), 1);
+                    }
+
+                    if (drawPlayer) {
+                        drawPlayer.hasSaidUno = false;
                     }
 
                     const nextTurnId = getNextPlayerIndex(
@@ -534,6 +558,29 @@ export class UnoHandler implements IGameModeHandler {
                     unoData.currentTurnPlayerId = nextTurnId;
                     unoData.state.activePhase = "play";
                     unoData.state.activePhaseData = { phase: "play" };
+
+                    broadcastState(ctx, unoData);
+                    break;
+                }
+
+                case "uno:say_uno": {
+                    console.log(`[UNO] HANDLING uno:say_uno`);
+                    const { gameId } = ctx.payload || {};
+
+                    if (gameId !== ctx.game.id) {
+                        console.warn(`[Uno Handler] Game ID mismatch in uno:say_uno`);
+                        return;
+                    }
+
+                    const sayPlayerId = String(ctx.userId);
+                    const sayPlayer = unoData.players[sayPlayerId];
+
+                    if (!sayPlayer || !sayPlayer.stillPlaying) {
+                        ctx.send({ type: "uno:error", payload: { notificationLevel: "toast", message: "player_not_found" } });
+                        return;
+                    }
+
+                    sayPlayer.hasSaidUno = true;
 
                     broadcastState(ctx, unoData);
                     break;

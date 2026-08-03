@@ -1142,15 +1142,45 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
 
             <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-6 shadow-xl" ref={myHandElRef}>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-bold text-white">
-                  Your Hand ({userHand.length} Cards Total)
-                </h3>
-                <button
-                  onClick={handleSayUno}
-                  className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-red-900/40 animate-pulse"
-                >
-                  Say UNO!
-                </button>
+                <div className="flex items-center gap-3">
+                  <h3 className="text-base font-bold text-white">
+                    Your Hand ({userHand.length} Cards Total)
+                  </h3>
+                  {userPlayerData?.hasSaidUno && (
+                    <span className="px-2.5 py-1 rounded-full bg-gradient-to-r from-red-600 to-rose-600 text-[10px] font-black text-white uppercase tracking-wider shadow-lg shadow-red-900/40 animate-pulse border border-red-400/40">
+                      UNO!
+                    </span>
+                  )}
+                </div>
+                {rules.uno && (
+                  userPlayerData?.hasSaidUno ? (
+                    <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600/20 border border-emerald-500/40 text-emerald-300">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                        <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
+                      </svg>
+                      <span className="font-black text-xs uppercase tracking-wider">UNO Said</span>
+                    </div>
+                  ) : userHand.length === 2 ? (
+                    <button
+                      onClick={handleSayUno}
+                      className="relative px-5 py-2.5 rounded-xl bg-gradient-to-r from-red-600 via-rose-500 to-red-600 hover:from-red-500 hover:via-rose-400 hover:to-red-500 text-white font-black text-sm uppercase tracking-wider shadow-xl shadow-red-900/50 transition-all active:scale-95 hover:scale-105 animate-pulse"
+                    >
+                      <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-400"></span>
+                      </span>
+                      ⚠️ Say UNO!
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleSayUno}
+                      disabled={userHand.length > 2}
+                      className="px-4 py-2 rounded-xl bg-red-600/50 hover:bg-red-600 disabled:bg-gray-700/50 disabled:text-gray-500 disabled:cursor-not-allowed text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-red-900/20 transition-all active:scale-95"
+                    >
+                      Say UNO!
+                    </button>
+                  )
+                )}
               </div>
 
               {userHand.length > 0 ? (
