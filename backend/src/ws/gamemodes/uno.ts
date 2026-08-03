@@ -114,10 +114,43 @@ function applyPendingDrawOrSetPhase(
     }
 }
 
+function clearGameState(unoData: UNO): void {
+    unoData.currentTurnPlayerId = "";
+    unoData.playerOrderIds = [];
+    unoData.topCard = null;
+    unoData.drawPile = [];
+    unoData.backLog = [];
+    unoData.drawStack = 0;
+    unoData.players = {};
+    unoData.playersWhoOut = [];
+    unoData.Scoreboard = undefined;
+    unoData.state.direction = 1;
+    unoData.state.activePhase = "lobby";
+    unoData.state.activePhaseData = { phase: "lobby" };
+}
+
+function checkIfEnd(ctx: GameModeContext, unoData: UNO): boolean {
+    if (unoData.gameRules.endCondition === "first_to_win" && unoData.playersWhoOut.length === 1) {
+        unoData.state.activePhase = "round_ended";
+        unoData.state.activePhaseData = { phase: "round_ended", winnerId: unoData.playersWhoOut[0].playerId };
+        broadcastState(ctx, unoData)
+        return true;
+    }
+
+    if (unoData.gameRules.endCondition === "last_standing" && Object.values(unoData.players).filter(p => p.stillPlaying).length === 1) {
+        unoData.state.activePhase = "round_ended";
+        unoData.state.activePhaseData = { phase: "round_ended", winnerId: unoData.playersWhoOut[0].playerId };
+        broadcastState(ctx, unoData)
+        return true;
+    }
+
+    return false;
+}
+
 function broadcastState(ctx: GameModeContext, unoData: UNO): void {
     ctx.game.currentGameModeData = unoData;
     ctx.broadcast({
-        type: "uno:card_played",
+        type: "uno:update_game_state",
         payload: { unoData }
     });
 }
@@ -398,6 +431,7 @@ export class UnoHandler implements IGameModeHandler {
                             });
                         }
 
+                        if (checkIfEnd(ctx, unoData)) break;
                         applyPendingDrawOrSetPhase(unoData, nextTurnId, "draw2");
 
                         broadcastState(ctx, unoData);
@@ -441,6 +475,7 @@ export class UnoHandler implements IGameModeHandler {
                             }
                         }
 
+                        if (checkIfEnd(ctx, unoData)) break;
                         unoData.currentTurnPlayerId = nextTurnId;
                         unoData.state.activePhase = "play";
                         unoData.state.activePhaseData = { phase: "play" };
@@ -466,6 +501,7 @@ export class UnoHandler implements IGameModeHandler {
                             });
                         }
 
+                        if (checkIfEnd(ctx, unoData)) break;
                         unoData.currentTurnPlayerId = nextTurnId;
                         unoData.state.activePhase = "play";
                         unoData.state.activePhaseData = { phase: "play" };
@@ -488,6 +524,9 @@ export class UnoHandler implements IGameModeHandler {
                             playerId: playerId
                         });
                     }
+
+                    if (checkIfEnd(ctx, unoData)) break;
+
 
                     unoData.currentTurnPlayerId = nextTurnId;
                     unoData.state.activePhase = "play";
@@ -551,6 +590,8 @@ export class UnoHandler implements IGameModeHandler {
                             unoData.state.direction,
                             unoData.players
                         );
+
+                        if (checkIfEnd(ctx, unoData)) break;
 
                         applyPendingDrawOrSetPhase(unoData, nextTurnId, "draw4");
                     } else {
@@ -637,6 +678,20 @@ export class UnoHandler implements IGameModeHandler {
                     sayPlayer.hasSaidUno = true;
 
                     broadcastState(ctx, unoData);
+                    break;
+                }
+
+                case "uno:restart_game": {
+                    console.log(`[UNO] HANDLING uno:restart_game`);
+
+                    if (ctx.userId != ctx.game.lobby.host.id) {
+                        ctx.send({ type: "uno:error", payload: { notificationLevel: "modal", message: "only_host_can_restart_game" } });
+                        return;
+                    }
+
+                    clearGameState(ctx.game.currentGameModeData as UNO);
+
+                    broadcastState(ctx, ctx.game.currentGameModeData as UNO);
                     break;
                 }
 

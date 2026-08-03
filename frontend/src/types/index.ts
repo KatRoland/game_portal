@@ -303,4 +303,5 @@ export interface UNO_FN {
   drawCard: () => void
   sayUno: () => void
   chooseColor: (color: 'red' | 'green' | 'blue' | 'yellow') => void
+  restartGame: () => void
 }

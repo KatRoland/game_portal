@@ -1276,7 +1276,7 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                   </h3>
                 </div>
                 <button
-                  onClick={() => setActiveScreen('lobby')}
+                  onClick={() => UNOFN.restartGame()}
                   className="w-full py-3 px-6 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold shadow-lg shadow-blue-900/40 transition-all"
                 >
                   Start New Round

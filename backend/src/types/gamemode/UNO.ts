@@ -37,7 +37,8 @@ export type UNOPhaseData =
     | { phase: "draw"; cardsToDraw: number; canDrawMore: boolean }
     | { phase: "play"; }
     | { phase: "choose_color"; pendingCard: UNOCard }
-    | { phase: "draw_pending"; drawAmount: number; drawType: "draw2" | "draw4" };
+    | { phase: "draw_pending"; drawAmount: number; drawType: "draw2" | "draw4" }
+    | { phase: "round_ended"; winnerId: string };
 
 export interface UNO {
     currentTurnPlayerId: string;

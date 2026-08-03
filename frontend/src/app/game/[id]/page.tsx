@@ -185,6 +185,7 @@ export default function GamePage() {
     drawCard: () => { wsRef.current?.send({ type: 'uno:draw_card', payload: { gameId: id } }) },
     sayUno: () => { wsRef.current?.send({ type: 'uno:say_uno', payload: { gameId: id } }) },
     chooseColor: (color: 'red' | 'green' | 'blue' | 'yellow') => { wsRef.current?.send({ type: 'uno:choose_color', payload: { gameId: id, color } }) },
+    restartGame: () => { wsRef.current?.send({ type: 'uno:restart_game', payload: { gameId: id } }) },
   }
 
   useEffect(() => {
@@ -477,7 +478,7 @@ export default function GamePage() {
           });
         })
 
-        wsRef.current?.on('uno:card_played', (payload: any) => {
+        wsRef.current?.on('uno:update_game_state', (payload: any) => {
           console.log(`[UNO] received uno:card_played`);
           console.log(payload)
           setGameData((prev) => {
