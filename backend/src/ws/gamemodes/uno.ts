@@ -695,6 +695,27 @@ export class UnoHandler implements IGameModeHandler {
                     break;
                 }
 
+                case "uno:settings_changed": {
+                    console.log(`[UNO] HANDLING uno:settings_changed`);
+                    const { gameId, rules } = ctx.payload || {};
+
+                    if (gameId !== ctx.game.id) {
+                        console.warn(`[Uno Handler] Game ID mismatch in uno:settings_changed`);
+                        return;
+                    }
+
+                    if (ctx.userId != ctx.game.lobby.host.id) {
+                        ctx.send({ type: "uno:error", payload: { notificationLevel: "modal", message: "only_host_can_change_settings" } });
+                        return;
+                    }
+
+                    const unoData = ctx.game.currentGameModeData as UNO;
+                    unoData.gameRules = rules;
+
+                    broadcastState(ctx, unoData);
+                    break;
+                }
+
                 default:
                     break;
             }

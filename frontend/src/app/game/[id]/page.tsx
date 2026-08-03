@@ -186,6 +186,7 @@ export default function GamePage() {
     sayUno: () => { wsRef.current?.send({ type: 'uno:say_uno', payload: { gameId: id } }) },
     chooseColor: (color: 'red' | 'green' | 'blue' | 'yellow') => { wsRef.current?.send({ type: 'uno:choose_color', payload: { gameId: id, color } }) },
     restartGame: () => { wsRef.current?.send({ type: 'uno:restart_game', payload: { gameId: id } }) },
+    settingsChanged: (gameId: string, rules: UNOGameRules) => { wsRef.current?.send({ type: 'uno:settings_changed', payload: { gameId, rules } }) },
   }
 
   useEffect(() => {

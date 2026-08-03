@@ -304,4 +304,5 @@ export interface UNO_FN {
   sayUno: () => void
   chooseColor: (color: 'red' | 'green' | 'blue' | 'yellow') => void
   restartGame: () => void
+  settingsChanged: (gameId: string, rules: UNOGameRules) => void
 }

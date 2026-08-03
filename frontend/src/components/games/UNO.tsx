@@ -592,21 +592,17 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
     }
   }, [unoState?.state?.activePhase, GameData?.mode]);
 
-  // const sendSettingsWS = (updatedRules: UNOGameRules) => {
-  //   if (isHost && GameData?.id) {
-  //     getWSClient()?.send({
-  //       type: 'uno:update_settings',
-  //       payload: { gameId: GameData.id, rules: updatedRules },
-  //     });
-  //   }
-  // };
+  const sendSettingsWS = (updatedRules: UNOGameRules) => {
+    if (!GameData) return;
+    UNOFN.settingsChanged(GameData.id, updatedRules);
+  };
 
   const handleRuleToggle = (key: keyof UNOGameRules) => {
     if (!isHost) return;
     if (typeof rules[key] === 'boolean') {
       const updated = { ...rules, [key]: !rules[key] };
       setRules(updated);
-      // sendSettingsWS(updated);
+      sendSettingsWS(updated);
     }
   };
 
@@ -614,7 +610,7 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
     if (!isHost) return;
     const updated = { ...rules, [key]: value };
     setRules(updated);
-    // sendSettingsWS(updated);
+    sendSettingsWS(updated);
   };
 
   const handleStartRound = () => {
