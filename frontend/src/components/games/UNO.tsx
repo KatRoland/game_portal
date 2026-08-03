@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Game,
   GameFN,
@@ -17,6 +17,242 @@ import {
 import { getUserAvatar } from '@/lib/api';
 import { getUNOCardImagePath, getUNOCardBackPath } from '@/lib/unoCardHelper';
 import { useUser } from '@/contexts/UserContext';
+
+
+interface CardAnimation {
+  id: string;
+  card: UNOCard;
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  isOwnPlay: boolean;
+  playerName?: string;
+}
+
+interface DrawAnimation {
+  id: string;
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  isSelfDraw: boolean;
+  playerName?: string;
+  delay: number;
+}
+
+function AnimationOverlay({
+  playAnims,
+  drawAnims,
+  onPlayDone,
+  onDrawDone,
+}: {
+  playAnims: CardAnimation[];
+  drawAnims: DrawAnimation[];
+  onPlayDone: (id: string) => void;
+  onDrawDone: (id: string) => void;
+}) {
+  return (
+    <>
+      {playAnims.map((anim) => (
+        <CardFlyAnimation key={anim.id} anim={anim} onDone={() => onPlayDone(anim.id)} />
+      ))}
+      {drawAnims.map((anim) => (
+        <DrawCardFlyAnimation key={anim.id} anim={anim} onDone={() => onDrawDone(anim.id)} />
+      ))}
+    </>
+  );
+}
+
+function CardFlyAnimation({ anim, onDone }: { anim: CardAnimation; onDone: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(onDone, 750);
+    return () => clearTimeout(timer);
+  }, [onDone]);
+
+  const dx = anim.toX - anim.fromX;
+  const dy = anim.toY - anim.fromY;
+
+  const cardColorMap: Record<string, string> = {
+    red: 'rgba(239,68,68,0.7)',
+    blue: 'rgba(59,130,246,0.7)',
+    green: 'rgba(34,197,94,0.7)',
+    yellow: 'rgba(234,179,8,0.7)',
+    wild: 'rgba(168,85,247,0.7)',
+  };
+  const glowColor = cardColorMap[anim.card.color] || 'rgba(255,255,255,0.5)';
+
+  return (
+    <div
+      ref={ref}
+      className="fixed pointer-events-none"
+      style={{
+        left: anim.fromX,
+        top: anim.fromY,
+        zIndex: 9999,
+        width: 80,
+        height: 120,
+        animation: 'unoCardFly 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards',
+        ['--fly-dx' as string]: `${dx}px`,
+        ['--fly-dy' as string]: `${dy}px`,
+      }}
+    >
+      {!anim.isOwnPlay ? (
+        <div
+          className="w-full h-full"
+          style={{
+            perspective: '600px',
+          }}
+        >
+          <div
+            className="relative w-full h-full"
+            style={{
+              transformStyle: 'preserve-3d',
+              animation: 'unoCardFlip 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards',
+            }}
+          >
+            <img
+              src={getUNOCardBackPath()}
+              alt="card back"
+              className="absolute inset-0 w-full h-full rounded-lg object-contain"
+              style={{ backfaceVisibility: 'hidden' }}
+            />
+            <img
+              src={getUNOCardImagePath(anim.card)}
+              alt="played card"
+              className="absolute inset-0 w-full h-full rounded-lg object-contain"
+              style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
+            />
+          </div>
+        </div>
+      ) : (
+        <img
+          src={getUNOCardImagePath(anim.card)}
+          alt="played card"
+          className="w-full h-full rounded-lg object-contain"
+          style={{ filter: `drop-shadow(0 0 12px ${glowColor})` }}
+        />
+      )}
+
+      {!anim.isOwnPlay && anim.playerName && (
+        <div
+          className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap px-2 py-0.5 rounded-full bg-black/80 border border-white/20 text-[10px] font-bold text-white"
+          style={{ animation: 'unoTagFade 600ms ease forwards' }}
+        >
+          {anim.playerName}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DrawCardFlyAnimation({ anim, onDone }: { anim: DrawAnimation; onDone: () => void }) {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const showTimer = setTimeout(() => setVisible(true), anim.delay);
+    const doneTimer = setTimeout(onDone, anim.delay + 600);
+    return () => {
+      clearTimeout(showTimer);
+      clearTimeout(doneTimer);
+    };
+  }, [anim.delay, onDone]);
+
+  if (!visible) return null;
+
+  const dx = anim.toX - anim.fromX;
+  const dy = anim.toY - anim.fromY;
+
+  return (
+    <div
+      className="fixed pointer-events-none"
+      style={{
+        left: anim.fromX,
+        top: anim.fromY,
+        zIndex: 9998,
+        width: 64,
+        height: 96,
+        animation: 'unoDrawFly 500ms cubic-bezier(0.22, 1, 0.36, 1) forwards',
+        ['--fly-dx' as string]: `${dx}px`,
+        ['--fly-dy' as string]: `${dy}px`,
+      }}
+    >
+      <img
+        src={getUNOCardBackPath()}
+        alt="drawn card"
+        className="w-full h-full rounded-lg object-contain"
+        style={{ filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.3))' }}
+      />
+      {!anim.isSelfDraw && anim.playerName && (
+        <div
+          className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap px-2 py-0.5 rounded-full bg-black/80 border border-white/20 text-[9px] font-bold text-gray-300"
+          style={{ animation: 'unoTagFade 500ms ease forwards' }}
+        >
+          {anim.playerName} drew
+        </div>
+      )}
+    </div>
+  );
+}
+
+const UNO_ANIMATION_STYLES = `
+@keyframes unoCardFly {
+  0% {
+    transform: translate(0, 0) scale(1.15) rotate(-8deg);
+    opacity: 1;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--fly-dx), var(--fly-dy)) scale(1) rotate(0deg);
+    opacity: 0;
+  }
+}
+@keyframes unoCardFlip {
+  0% {
+    transform: rotateY(0deg);
+  }
+  100% {
+    transform: rotateY(180deg);
+  }
+}
+@keyframes unoTagFade {
+  0% { opacity: 1; transform: translate(-50%, 0); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -8px); }
+}
+@keyframes unoTopCardLand {
+  0% {
+    filter: drop-shadow(0 0 0px transparent);
+    transform: scale(1);
+  }
+  30% {
+    filter: drop-shadow(0 0 20px var(--land-glow));
+    transform: scale(1.08);
+  }
+  100% {
+    filter: drop-shadow(0 0 0px transparent);
+    transform: scale(1);
+  }
+}
+@keyframes unoDrawFly {
+  0% {
+    transform: translate(0, 0) scale(0.85) rotate(5deg);
+    opacity: 1;
+  }
+  50% {
+    transform: translate(calc(var(--fly-dx) * 0.5), calc(var(--fly-dy) * 0.5 - 30px)) scale(1.05) rotate(-3deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--fly-dx), var(--fly-dy)) scale(1) rotate(0deg);
+    opacity: 0;
+  }
+}
+`;
 
 interface UNOProps {
   GameData: Game | null;
@@ -128,6 +364,211 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
   const [activeScreen, setActiveScreen] = useState<'lobby' | 'gameplay' | 'end'>('lobby');
   const [rules, setRules] = useState<UNOGameRules>(() => unoState?.gameRules || DEFAULT_RULES);
 
+  const playersMap = unoState?.players || {};
+  const playerOrder = unoState?.playerOrderIds || [];
+  const userPlayerData = currentUserId && playersMap[currentUserId] ? playersMap[currentUserId] : null;
+  const userHand: UNOCardInHand[] = userPlayerData?.cards || [];
+
+  const [cardAnimations, setCardAnimations] = useState<CardAnimation[]>([]);
+  const [drawAnimations, setDrawAnimations] = useState<DrawAnimation[]>([]);
+  const [topCardLanding, setTopCardLanding] = useState(false);
+  const prevTopCardRef = useRef<UNOCard | null>(null);
+  const prevTurnPlayerRef = useRef<string | null>(null);
+  const prevHandLenRef = useRef<number>(0);
+  const prevOtherCardCountsRef = useRef<Map<string, number>>(new Map());
+  const topCardElRef = useRef<HTMLDivElement>(null);
+  const drawPileElRef = useRef<HTMLDivElement>(null);
+  const myHandElRef = useRef<HTMLDivElement>(null);
+  const otherPlayerElRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const drawAnimTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const setOtherPlayerRef = useCallback((id: string, el: HTMLDivElement | null) => {
+    if (el) {
+      otherPlayerElRefs.current.set(id, el);
+    } else {
+      otherPlayerElRefs.current.delete(id);
+    }
+  }, []);
+
+  const removePlayAnimation = useCallback((id: string) => {
+    setCardAnimations((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
+  const removeDrawAnimation = useCallback((id: string) => {
+    setDrawAnimations((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
+  useEffect(() => {
+    const newTop = unoState?.topCard || null;
+    const oldTop = prevTopCardRef.current;
+    const currentTurn = unoState?.currentTurnPlayerId || null;
+    const prevTurn = prevTurnPlayerRef.current;
+    const currentHandLen = userHand.length;
+    const prevHandLen = prevHandLenRef.current;
+
+    prevTopCardRef.current = newTop;
+    prevTurnPlayerRef.current = currentTurn;
+
+    if (!newTop || !oldTop) return;
+    if (
+      newTop.color === oldTop.color &&
+      newTop.type === oldTop.type &&
+      newTop.value === oldTop.value
+    ) return;
+
+    const wePlayedCard = currentHandLen < prevHandLen;
+
+    const whoPlayedId = prevTurn;
+
+    const targetEl = topCardElRef.current;
+    if (!targetEl) return;
+    const targetRect = targetEl.getBoundingClientRect();
+    const toX = targetRect.left + targetRect.width / 2 - 40;
+    const toY = targetRect.top + targetRect.height / 2 - 60;
+
+    let fromX = toX;
+    let fromY = toY + 200;
+
+    if (wePlayedCard) {
+      const handEl = myHandElRef.current;
+      if (handEl) {
+        const handRect = handEl.getBoundingClientRect();
+        fromX = handRect.left + handRect.width / 2 - 40;
+        fromY = handRect.top + handRect.height / 2 - 60;
+      }
+    } else if (whoPlayedId) {
+      const playerEl = otherPlayerElRefs.current.get(whoPlayedId);
+      if (playerEl) {
+        const playerRect = playerEl.getBoundingClientRect();
+        fromX = playerRect.left + playerRect.width / 2 - 40;
+        fromY = playerRect.top + playerRect.height / 2 - 60;
+      }
+    }
+
+    const playerName = whoPlayedId && !wePlayedCard
+      ? (unoState?.players?.[whoPlayedId]?.name || 'Player')
+      : undefined;
+
+    const animId = `card-anim-${Date.now()}-${Math.random()}`;
+    setCardAnimations((prev) => [
+      ...prev,
+      {
+        id: animId,
+        card: newTop,
+        fromX,
+        fromY,
+        toX,
+        toY,
+        isOwnPlay: wePlayedCard,
+        playerName,
+      },
+    ]);
+
+    setTopCardLanding(true);
+    const glowTimer = setTimeout(() => setTopCardLanding(false), 700);
+    return () => clearTimeout(glowTimer);
+  }, [unoState?.topCard?.color, unoState?.topCard?.type, unoState?.topCard?.value, unoState?.currentTurnPlayerId]);
+
+  useEffect(() => {
+    const DRAW_STAGGER_MS = 150;
+
+    const pileEl = drawPileElRef.current;
+    if (!pileEl) {
+      prevHandLenRef.current = userHand.length;
+      const counts = new Map<string, number>();
+      playerOrder.forEach((id) => {
+        counts.set(id, playersMap[id]?.cards?.length || 0);
+      });
+      prevOtherCardCountsRef.current = counts;
+      return;
+    }
+    const pileRect = pileEl.getBoundingClientRect();
+    const fromX = pileRect.left + pileRect.width / 2 - 32;
+    const fromY = pileRect.top + pileRect.height / 2 - 48;
+
+    const newAnims: DrawAnimation[] = [];
+
+    const currentHandLen = userHand.length;
+    const prevHandLen = prevHandLenRef.current;
+    const topChanged = (() => {
+      const newTop = unoState?.topCard;
+      const oldTop = prevTopCardRef.current;
+      if (!newTop || !oldTop) return false;
+      return newTop.color !== oldTop.color || newTop.type !== oldTop.type || newTop.value !== oldTop.value;
+    })();
+
+    if (currentHandLen > prevHandLen && !topChanged) {
+      const cardsDrawn = currentHandLen - prevHandLen;
+      const handEl = myHandElRef.current;
+      let toX = fromX;
+      let toY = fromY + 200;
+      if (handEl) {
+        const handRect = handEl.getBoundingClientRect();
+        toX = handRect.left + handRect.width / 2 - 32;
+        toY = handRect.top + handRect.height / 2 - 48;
+      }
+      for (let i = 0; i < cardsDrawn; i++) {
+        newAnims.push({
+          id: `draw-self-${Date.now()}-${i}-${Math.random()}`,
+          fromX,
+          fromY,
+          toX,
+          toY,
+          isSelfDraw: true,
+          delay: i * DRAW_STAGGER_MS,
+        });
+      }
+    }
+
+    const prevCounts = prevOtherCardCountsRef.current;
+    playerOrder.forEach((id) => {
+      if (id === currentUserId) return;
+      const newCount = playersMap[id]?.cards?.length || 0;
+      const oldCount = prevCounts.get(id) ?? 0;
+      if (newCount > oldCount) {
+        const cardsDrawn = newCount - oldCount;
+        const playerEl = otherPlayerElRefs.current.get(id);
+        let toX = fromX;
+        let toY = fromY - 200;
+        if (playerEl) {
+          const playerRect = playerEl.getBoundingClientRect();
+          toX = playerRect.left + playerRect.width / 2 - 32;
+          toY = playerRect.top + playerRect.height / 2 - 48;
+        }
+        const pName = playersMap[id]?.name || 'Player';
+        for (let i = 0; i < cardsDrawn; i++) {
+          newAnims.push({
+            id: `draw-other-${id}-${Date.now()}-${i}-${Math.random()}`,
+            fromX,
+            fromY,
+            toX,
+            toY,
+            isSelfDraw: false,
+            playerName: pName,
+            delay: i * DRAW_STAGGER_MS,
+          });
+        }
+      }
+    });
+
+    prevHandLenRef.current = currentHandLen;
+    const counts = new Map<string, number>();
+    playerOrder.forEach((id) => {
+      counts.set(id, playersMap[id]?.cards?.length || 0);
+    });
+    prevOtherCardCountsRef.current = counts;
+
+    if (newAnims.length > 0) {
+      setDrawAnimations((prev) => [...prev, ...newAnims]);
+    }
+
+    return () => {
+      drawAnimTimersRef.current.forEach(clearTimeout);
+      drawAnimTimersRef.current = [];
+    };
+  }, [userHand.length, JSON.stringify(playerOrder.map(id => playersMap[id]?.cards?.length || 0))]);
+
+
   useEffect(() => {
     if (!error) return;
     const timer = setTimeout(() => clearError(), 4000);
@@ -182,10 +623,6 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
     }
   };
 
-  const playersMap = unoState?.players || {};
-  const playerOrder = unoState?.playerOrderIds || [];
-  const userPlayerData = currentUserId && playersMap[currentUserId] ? playersMap[currentUserId] : null;
-  const userHand: UNOCardInHand[] = userPlayerData?.cards || [];
   const groupedUserHand = groupHandCards(userHand);
 
   const topCard: UNOCard | null = unoState?.topCard || null;
@@ -247,6 +684,13 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100">
+      <style dangerouslySetInnerHTML={{ __html: UNO_ANIMATION_STYLES }} />
+      <AnimationOverlay
+        playAnims={cardAnimations}
+        drawAnims={drawAnimations}
+        onPlayDone={removePlayAnimation}
+        onDrawDone={removeDrawAnimation}
+      />
       {error && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[60] animate-fadeIn">
           <div className="flex items-center gap-3 px-5 py-3 rounded-2xl border border-red-500/40 bg-red-950/90 backdrop-blur-xl shadow-2xl shadow-red-900/30">
@@ -547,7 +991,6 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
               </div>
             )}
 
-            {/* Turn & Action Indicator */}
             <div
               className={`rounded-2xl border p-4 sm:p-5 transition-all flex flex-col sm:flex-row items-center justify-between gap-4 ${isDrawPending && isMyTurn
                 ? 'border-red-500/60 bg-gradient-to-r from-red-950/60 via-rose-900/40 to-red-950/60 shadow-xl shadow-red-900/20 animate-pulse'
@@ -606,13 +1049,14 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                 {otherPlayersList.map((player) => (
-                  <OtherPlayerHandDisplay
-                    key={player.id}
-                    playerName={player.name}
-                    cardCount={player.cardCount}
-                    hasSaidUno={player.hasSaidUno}
-                    isTurn={player.isTurn}
-                  />
+                  <div key={player.id} ref={(el) => setOtherPlayerRef(player.id, el)}>
+                    <OtherPlayerHandDisplay
+                      playerName={player.name}
+                      cardCount={player.cardCount}
+                      hasSaidUno={player.hasSaidUno}
+                      isTurn={player.isTurn}
+                    />
+                  </div>
                 ))}
               </div>
             </div>
@@ -637,7 +1081,7 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                 </div>
 
                 <div className="flex items-center gap-8">
-                  <div className="flex flex-col items-center">
+                  <div className="flex flex-col items-center" ref={topCardElRef}>
                     <span className="text-xs font-semibold text-gray-400 mb-2">
                       Top Card
                     </span>
@@ -646,6 +1090,16 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                         src={getUNOCardImagePath(topCard)}
                         alt="Top Card"
                         className="w-24 h-36 rounded-xl shadow-2xl transform hover:scale-105 transition-transform object-contain filter drop-shadow-xl cursor-pointer"
+                        style={topCardLanding ? {
+                          animation: 'unoTopCardLand 700ms ease-out forwards',
+                          ['--land-glow' as string]: {
+                            red: 'rgba(239,68,68,0.6)',
+                            blue: 'rgba(59,130,246,0.6)',
+                            green: 'rgba(34,197,94,0.6)',
+                            yellow: 'rgba(234,179,8,0.6)',
+                            wild: 'rgba(168,85,247,0.6)',
+                          }[topCard.color] || 'rgba(255,255,255,0.4)',
+                        } : undefined}
                       />
                     ) : (
                       <div className="w-24 h-36 rounded-xl border border-dashed border-white/20 flex items-center justify-center text-xs text-gray-500">
@@ -654,7 +1108,7 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                     )}
                   </div>
 
-                  <div className="flex flex-col items-center">
+                  <div className="flex flex-col items-center" ref={drawPileElRef}>
                     <span className="text-xs font-semibold text-gray-400 mb-2">
                       Draw Pile ({drawPileCount})
                     </span>
@@ -686,7 +1140,7 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-6 shadow-xl">
+            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-6 shadow-xl" ref={myHandElRef}>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-base font-bold text-white">
                   Your Hand ({userHand.length} Cards Total)
