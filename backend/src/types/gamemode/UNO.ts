@@ -17,7 +17,7 @@ export interface UNOCardInHand extends UNOCard {
     id: string;
 }
 
-export type UNOPhase = "lobby" | "draw" | "play" | "choose_color";
+export type UNOPhase = "lobby" | "draw" | "play" | "choose_color" | "draw_pending" | "round_ended";
 
 export interface GameRules {
     jumpin: boolean;
@@ -36,7 +36,8 @@ export type UNOPhaseData =
     | { phase: "init"; }
     | { phase: "draw"; cardsToDraw: number; canDrawMore: boolean }
     | { phase: "play"; }
-    | { phase: "choose_color"; pendingCard: UNOCard };
+    | { phase: "choose_color"; pendingCard: UNOCard }
+    | { phase: "draw_pending"; drawAmount: number; drawType: "draw2" | "draw4" };
 
 export interface UNO {
     currentTurnPlayerId: string;
@@ -44,6 +45,7 @@ export interface UNO {
     topCard: UNOCard | null;
     drawPile: UNOCard[];
     backLog: UNOCard[];
+    drawStack: number;
     players: { [playerId: string]: UNOPlayer };
     playersWhoOut: {
         index: number;

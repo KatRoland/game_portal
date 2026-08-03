@@ -254,7 +254,7 @@ export interface UNOPlayer {
   stillPlaying: boolean;
 }
 
-export type UNOPhase = "draw" | "play" | "choose_color";
+export type UNOPhase = "draw" | "play" | "choose_color" | "draw_pending";
 
 export interface UNOGameRules {
   jumpin: boolean;
@@ -273,7 +273,8 @@ export type UNOPhaseData =
   | { phase: "init" }
   | { phase: "draw"; cardsToDraw: number; canDrawMore: boolean }
   | { phase: "play" }
-  | { phase: "choose_color"; pendingCard: UNOCard };
+  | { phase: "choose_color"; pendingCard: UNOCard }
+  | { phase: "draw_pending"; drawAmount: number; drawType: "draw2" | "draw4" };
 
 export interface UNOState {
   currentTurnPlayerId: string;
@@ -281,6 +282,7 @@ export interface UNOState {
   topCard: UNOCard;
   drawPile: UNOCard[];
   backLog: UNOCard[];
+  drawStack: number;
   players: { [playerId: string]: UNOPlayer };
   playersWhoOut: {
     index: number;
@@ -297,7 +299,7 @@ export interface UNOState {
 
 export interface UNO_FN {
   start: (rules: UNOGameRules) => void
-  playCard: (cardId: string) => void
+  playCard: (cardIds: string[]) => void
   drawCard: () => void
   sayUno: () => void
   chooseColor: (color: 'red' | 'green' | 'blue' | 'yellow') => void

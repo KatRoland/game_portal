@@ -142,9 +142,9 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
 
   useEffect(() => {
     const phase = unoState?.state?.activePhase;
-    if (phase === 'play' || phase === 'draw' || phase === 'choose_color') {
+    if (phase === 'play' || phase === 'draw' || phase === 'choose_color' || phase === 'draw_pending') {
       setActiveScreen('gameplay');
-    } else if (phase === 'ended' || GameData?.mode === GameMode.Ended) {
+    } else if (phase === 'round_ended') {
       setActiveScreen('end');
     } else {
       setActiveScreen('lobby');
@@ -182,7 +182,6 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
     }
   };
 
-  // Real data extractions
   const playersMap = unoState?.players || {};
   const playerOrder = unoState?.playerOrderIds || [];
   const userPlayerData = currentUserId && playersMap[currentUserId] ? playersMap[currentUserId] : null;
@@ -222,8 +221,8 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
   const winnerId = unoState?.playersWhoOut?.[0]?.playerId;
   const winnerName = winnerId && playersMap[winnerId] ? playersMap[winnerId].name : 'Winner';
 
-  const handlePlayCard = (cardId: string) => {
-    UNOFN.playCard(cardId);
+  const handlePlayCard = (cardIds: string[]) => {
+    UNOFN.playCard(cardIds);
   };
 
   const handleDrawCard = () => {
@@ -241,10 +240,13 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
   const isMyTurn = currentUserId === unoState?.currentTurnPlayerId;
   const currentPhase = unoState?.state?.activePhaseData?.phase;
   const showColorPicker = currentPhase === 'choose_color' && isMyTurn;
+  const isDrawPending = currentPhase === 'draw_pending';
+  const drawPendingData = isDrawPending
+    ? (unoState?.state?.activePhaseData as { phase: 'draw_pending'; drawAmount: number; drawType: 'draw2' | 'draw4' })
+    : null;
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100">
-      {/* Error Toast */}
       {error && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[60] animate-fadeIn">
           <div className="flex items-center gap-3 px-5 py-3 rounded-2xl border border-red-500/40 bg-red-950/90 backdrop-blur-xl shadow-2xl shadow-red-900/30">
@@ -514,7 +516,6 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
 
         {activeScreen === 'gameplay' && (
           <div className="space-y-8 animate-fadeIn">
-            {/* Color Picker Modal for Wild / Draw4 */}
             {showColorPicker && (
               <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn">
                 <div className="rounded-3xl border border-white/20 bg-gray-900/95 backdrop-blur-xl p-8 shadow-2xl max-w-md w-full mx-4">
@@ -546,12 +547,54 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
               </div>
             )}
 
-            {/* Turn Indicator */}
-            <div className={`rounded-2xl border p-4 text-center font-bold text-sm transition-all ${isMyTurn
-                ? 'border-yellow-400/60 bg-yellow-500/10 text-yellow-300 shadow-lg shadow-yellow-500/10'
-                : 'border-white/10 bg-white/5 text-gray-400'
-              }`}>
-              {isMyTurn ? '🎯 Your Turn — Play a card or draw!' : `⏳ Waiting for ${unoState?.players?.[unoState?.currentTurnPlayerId]?.name || 'other player'}...`}
+            {/* Turn & Action Indicator */}
+            <div
+              className={`rounded-2xl border p-4 sm:p-5 transition-all flex flex-col sm:flex-row items-center justify-between gap-4 ${isDrawPending && isMyTurn
+                ? 'border-red-500/60 bg-gradient-to-r from-red-950/60 via-rose-900/40 to-red-950/60 shadow-xl shadow-red-900/20 animate-pulse'
+                : isDrawPending && !isMyTurn
+                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                  : isMyTurn
+                    ? 'border-yellow-400/60 bg-yellow-500/10 text-yellow-300 shadow-lg shadow-yellow-500/10'
+                    : 'border-white/10 bg-white/5 text-gray-400'
+                }`}
+            >
+              <div className="flex items-center gap-3 text-center sm:text-left">
+                <span className="text-2xl flex-shrink-0">
+                  {isDrawPending ? '⚡' : isMyTurn ? '🎯' : '⏳'}
+                </span>
+                <div>
+                  <div className="font-bold text-sm sm:text-base text-white flex items-center gap-2 justify-center sm:justify-start">
+                    {isDrawPending && isMyTurn ? (
+                      <span className="text-red-400 font-extrabold uppercase tracking-wide">
+                        Draw Stack Pending: +{drawPendingData?.drawAmount} Cards!
+                      </span>
+                    ) : isDrawPending && !isMyTurn ? (
+                      <span>
+                        {unoState?.players?.[unoState?.currentTurnPlayerId]?.name || 'Player'} must draw{' '}
+                        <span className="text-amber-400 font-bold">+{drawPendingData?.drawAmount}</span> or counter
+                      </span>
+                    ) : isMyTurn ? (
+                      <span>Your Turn — Play a card or draw!</span>
+                    ) : (
+                      <span>Waiting for {unoState?.players?.[unoState?.currentTurnPlayerId]?.name || 'other player'}...</span>
+                    )}
+                  </div>
+                  {isDrawPending && isMyTurn && (
+                    <p className="text-xs text-gray-300 mt-0.5">
+                      Play a <span className="font-bold text-yellow-300">{drawPendingData?.drawType === 'draw2' ? 'Draw 2' : 'Draw 4'}</span> from your hand to stack, or take the cards.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {isDrawPending && isMyTurn && (
+                <button
+                  onClick={handleDrawCard}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs sm:text-sm uppercase tracking-wider shadow-lg shadow-red-900/50 hover:scale-105 active:scale-95 transition-all whitespace-nowrap"
+                >
+                  Accept & Draw +{drawPendingData?.drawAmount}
+                </button>
+              )}
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-6 shadow-xl">
@@ -669,7 +712,9 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                     return (
                       <div
                         key={group.key}
-                        onClick={() => group.cards[0]?.id && handlePlayCard(group.cards[0].id)}
+                        onClick={() => {
+                          if (group.cards[0]?.id) handlePlayCard([group.cards[0].id]);
+                        }}
                         className="relative transition-transform hover:-translate-y-2 cursor-pointer select-none group"
                         style={{
                           width: `${totalWidth}px`,
@@ -694,8 +739,17 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                                 className="w-full h-full object-contain pointer-events-none rounded-lg"
                               />
                               {isTopCard && stackCount > 1 && (
-                                <span className="absolute -top-2 -right-2 bg-yellow-400 text-gray-950 text-xs font-black px-2 py-0.5 rounded-full shadow-lg border border-yellow-300 z-20">
-                                  ×{stackCount}
+                                <span
+                                  onClick={rules.canPlayMultipleCards ? (e) => {
+                                    e.stopPropagation();
+                                    const ids = group.cards.map(c => c.id).filter(Boolean);
+                                    if (ids.length > 0) handlePlayCard(ids);
+                                  } : undefined}
+                                  className={`absolute -top-2 -right-2 bg-yellow-400 text-gray-950 text-xs font-black px-2 py-0.5 rounded-full shadow-lg border border-yellow-300 z-20${rules.canPlayMultipleCards ? ' cursor-pointer hover:bg-green-400 hover:scale-110 hover:border-green-300 transition-all' : ''
+                                    }`}
+                                  title={rules.canPlayMultipleCards ? `Play all ${stackCount}` : `${stackCount} cards`}
+                                >
+                                  {rules.canPlayMultipleCards ? `▶ ×${stackCount}` : `×${stackCount}`}
                                 </span>
                               )}
                             </div>

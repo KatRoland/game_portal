@@ -149,6 +149,7 @@ export class UnoHandler implements IGameModeHandler {
                         topCard: topCard,
                         drawPile: currentDeck,
                         backLog: [],
+                        drawStack: 0,
                         players: unoPlayers,
                         playersWhoOut: [],
                         state: {
@@ -171,7 +172,7 @@ export class UnoHandler implements IGameModeHandler {
 
                 case "uno:play_card": {
                     console.log(`[UNO] HANDLING uno:play_card`);
-                    const { gameId, cardId } = ctx.payload || {};
+                    const { gameId, cardId, cardIds: rawCardIds } = ctx.payload || {};
 
                     if (gameId !== ctx.game.id) {
                         console.warn(`[Uno Handler] Game ID mismatch in uno:play_card`);
@@ -179,106 +180,163 @@ export class UnoHandler implements IGameModeHandler {
                     }
 
                     const currentPhase = unoData.state.activePhaseData.phase;
-                    if (currentPhase !== "play") {
+                    if (currentPhase !== "play" && currentPhase !== "draw_pending") {
                         console.warn(`[Uno Handler] uno:play_card called when phase is ${currentPhase}`);
                         return;
                     }
 
-                    if (String(ctx.userId) !== unoData.currentTurnPlayerId) {
-                        ctx.send({ type: "uno:error", payload: { notificationLevel: "modal", message: "not_your_turn" } });
-                        return;
-                    }
-
-                    const currentPlayer = unoData.players[String(ctx.userId)];
+                    const playerId = String(ctx.userId);
+                    const currentPlayer = unoData.players[playerId];
 
                     if (!currentPlayer) {
-                        console.warn(`[Uno Handler] Current player not found`);
+                        console.warn(`[Uno Handler] Player not found`);
                         return;
                     }
 
-                    const card = currentPlayer.cards.find(c => c.id === cardId);
-
-                    if (!card) {
-                        console.warn(`[Uno Handler] Card not found in player's hand`);
+                    const cardIds: string[] = rawCardIds || (cardId ? [cardId] : []);
+                    if (cardIds.length === 0) {
+                        console.warn(`[Uno Handler] No card IDs provided`);
                         return;
                     }
 
-                    const canPlay = isValidCard(card, unoData.topCard);
-
-                    if (!canPlay) {
-                        ctx.send({ type: "uno:error", payload: { notificationLevel: "modal", message: "invalid_card" } });
-                        return;
+                    const cards: UNOCardInHand[] = [];
+                    for (const cid of cardIds) {
+                        const found = currentPlayer.cards.find(c => c.id === cid);
+                        if (!found) {
+                            ctx.send({ type: "uno:error", payload: { notificationLevel: "modal", message: "card_not_found" } });
+                            return;
+                        }
+                        cards.push(found);
                     }
 
-                    if (card.type === "wild" || card.type === "draw4") {
-                        currentPlayer.cards = currentPlayer.cards.filter(c => c.id !== cardId);
+                    const firstCard = cards[0];
+
+                    if (cards.length > 1) {
+                        if (!unoData.gameRules.canPlayMultipleCards) {
+                            ctx.send({ type: "uno:error", payload: { notificationLevel: "modal", message: "multiple_cards_not_allowed" } });
+                            return;
+                        }
+                        if (!cards.every(c => c.type === firstCard.type && c.color === firstCard.color && c.value === firstCard.value)) {
+                            ctx.send({ type: "uno:error", payload: { notificationLevel: "modal", message: "cards_must_be_identical" } });
+                            return;
+                        }
+                        if (firstCard.type === "wild") {
+                            ctx.send({ type: "uno:error", payload: { notificationLevel: "modal", message: "cannot_multi_play_wild" } });
+                            return;
+                        }
+                    }
+
+                    const isCurrentTurn = playerId === unoData.currentTurnPlayerId;
+
+                    if (!isCurrentTurn) {
+                        if (!unoData.gameRules.jumpin || currentPhase !== "play") {
+                            ctx.send({ type: "uno:error", payload: { notificationLevel: "modal", message: "not_your_turn" } });
+                            return;
+                        }
+                        if (!unoData.topCard ||
+                            firstCard.type !== unoData.topCard.type ||
+                            firstCard.color !== unoData.topCard.color ||
+                            firstCard.value !== unoData.topCard.value) {
+                            ctx.send({ type: "uno:error", payload: { notificationLevel: "modal", message: "not_your_turn" } });
+                            return;
+                        }
+                        unoData.currentTurnPlayerId = playerId;
+                    }
+
+                    if (currentPhase === "draw_pending") {
+                        const pendingData = unoData.state.activePhaseData as { phase: "draw_pending"; drawAmount: number; drawType: "draw2" | "draw4" };
+                        if (firstCard.type !== pendingData.drawType) {
+                            ctx.send({ type: "uno:error", payload: { notificationLevel: "modal", message: "must_counter_or_draw" } });
+                            return;
+                        }
+                    } else {
+                        if (!isValidCard(firstCard, unoData.topCard)) {
+                            ctx.send({ type: "uno:error", payload: { notificationLevel: "modal", message: "invalid_card" } });
+                            return;
+                        }
+                    }
+
+                    const cardIdSet = new Set(cardIds);
+                    currentPlayer.cards = currentPlayer.cards.filter(c => !cardIdSet.has(c.id));
+
+                    if (unoData.topCard) {
+                        unoData.backLog.push(unoData.topCard);
+                    }
+                    for (let i = 0; i < cards.length - 1; i++) {
+                        unoData.backLog.push(cards[i]);
+                    }
+                    unoData.topCard = cards[cards.length - 1];
+
+                    const count = cards.length;
+
+                    if (firstCard.type === "wild" || firstCard.type === "draw4") {
+                        if (firstCard.type === "draw4") {
+                            const baseAmount = 4;
+                            if (unoData.gameRules.drawStackingMode === "multiply") {
+                                unoData.drawStack = Math.max(unoData.drawStack, 1);
+                                for (let i = 0; i < count; i++) unoData.drawStack *= baseAmount;
+                            } else {
+                                unoData.drawStack += count * baseAmount;
+                            }
+                        }
 
                         unoData.state.activePhase = "choose_color";
                         unoData.state.activePhaseData = {
                             phase: "choose_color",
-                            pendingCard: { ...card }
+                            pendingCard: { ...firstCard }
                         };
 
                         broadcastState(ctx, unoData);
                         break;
                     }
 
-                    if (card.type === "draw2") {
-                        currentPlayer.cards = currentPlayer.cards.filter(c => c.id !== cardId);
-
-                        if (unoData.topCard) {
-                            unoData.backLog.push(unoData.topCard);
+                    if (firstCard.type === "draw2") {
+                        const baseAmount = 2;
+                        if (unoData.gameRules.drawStackingMode === "multiply") {
+                            unoData.drawStack = Math.max(unoData.drawStack, 1);
+                            for (let i = 0; i < count; i++) unoData.drawStack *= baseAmount;
+                        } else {
+                            unoData.drawStack += count * baseAmount;
                         }
-                        unoData.topCard = card;
-
-                        const victimId = getNextPlayerIndex(
-                            unoData.currentTurnPlayerId,
-                            unoData.playerOrderIds,
-                            unoData.state.direction,
-                            unoData.players
-                        );
-                        drawCards(unoData, victimId, 2);
 
                         const nextTurnId = getNextPlayerIndex(
                             unoData.currentTurnPlayerId,
                             unoData.playerOrderIds,
                             unoData.state.direction,
-                            unoData.players,
-                            1
+                            unoData.players
                         );
 
                         if (currentPlayer.cards.length === 0) {
                             currentPlayer.stillPlaying = false;
                             unoData.playersWhoOut.push({
                                 index: unoData.playersWhoOut.length + 1,
-                                playerId: String(ctx.userId)
+                                playerId: playerId
                             });
                         }
 
                         unoData.currentTurnPlayerId = nextTurnId;
-                        unoData.state.activePhase = "play";
-                        unoData.state.activePhaseData = { phase: "play" };
+                        unoData.state.activePhase = "draw_pending";
+                        unoData.state.activePhaseData = {
+                            phase: "draw_pending",
+                            drawAmount: unoData.drawStack,
+                            drawType: "draw2"
+                        };
 
                         broadcastState(ctx, unoData);
                         break;
                     }
 
-                    if (card.type === "reverse") {
-                        currentPlayer.cards = currentPlayer.cards.filter(c => c.id !== cardId);
-
-                        if (unoData.topCard) {
-                            unoData.backLog.push(unoData.topCard);
+                    if (firstCard.type === "reverse") {
+                        if (count % 2 === 1) {
+                            unoData.state.direction = unoData.state.direction === 1 ? -1 : 1;
                         }
-                        unoData.topCard = card;
-
-                        unoData.state.direction = unoData.state.direction === 1 ? -1 : 1;
 
                         const activePlayers = unoData.playerOrderIds.filter(
                             id => unoData.players[id]?.stillPlaying
                         );
 
                         let nextTurnId: string;
-                        if (activePlayers.length === 2) {
+                        if (activePlayers.length === 2 && count % 2 === 1) {
                             nextTurnId = unoData.currentTurnPlayerId;
                         } else {
                             nextTurnId = getNextPlayerIndex(
@@ -293,7 +351,7 @@ export class UnoHandler implements IGameModeHandler {
                             currentPlayer.stillPlaying = false;
                             unoData.playersWhoOut.push({
                                 index: unoData.playersWhoOut.length + 1,
-                                playerId: String(ctx.userId)
+                                playerId: playerId
                             });
                             if (nextTurnId === unoData.currentTurnPlayerId) {
                                 nextTurnId = getNextPlayerIndex(
@@ -313,27 +371,20 @@ export class UnoHandler implements IGameModeHandler {
                         break;
                     }
 
-                    if (card.type === "skip") {
-                        currentPlayer.cards = currentPlayer.cards.filter(c => c.id !== cardId);
-
-                        if (unoData.topCard) {
-                            unoData.backLog.push(unoData.topCard);
-                        }
-                        unoData.topCard = card;
-
+                    if (firstCard.type === "skip") {
                         const nextTurnId = getNextPlayerIndex(
                             unoData.currentTurnPlayerId,
                             unoData.playerOrderIds,
                             unoData.state.direction,
                             unoData.players,
-                            1
+                            count
                         );
 
                         if (currentPlayer.cards.length === 0) {
                             currentPlayer.stillPlaying = false;
                             unoData.playersWhoOut.push({
                                 index: unoData.playersWhoOut.length + 1,
-                                playerId: String(ctx.userId)
+                                playerId: playerId
                             });
                         }
 
@@ -344,13 +395,6 @@ export class UnoHandler implements IGameModeHandler {
                         broadcastState(ctx, unoData);
                         break;
                     }
-
-                    currentPlayer.cards = currentPlayer.cards.filter(c => c.id !== cardId);
-
-                    if (unoData.topCard) {
-                        unoData.backLog.push(unoData.topCard);
-                    }
-                    unoData.topCard = card;
 
                     let nextTurnId = getNextPlayerIndex(
                         unoData.currentTurnPlayerId,
@@ -363,7 +407,7 @@ export class UnoHandler implements IGameModeHandler {
                         currentPlayer.stillPlaying = false;
                         unoData.playersWhoOut.push({
                             index: unoData.playersWhoOut.length + 1,
-                            playerId: String(ctx.userId)
+                            playerId: playerId
                         });
                     }
 
@@ -423,23 +467,20 @@ export class UnoHandler implements IGameModeHandler {
                     }
 
                     if (pendingCard.type === "draw4") {
-                        const victimId = getNextPlayerIndex(
+                        const nextTurnId = getNextPlayerIndex(
                             unoData.currentTurnPlayerId,
                             unoData.playerOrderIds,
                             unoData.state.direction,
                             unoData.players
                         );
-                        drawCards(unoData, victimId, 4);
-
-                        const nextTurnId = getNextPlayerIndex(
-                            unoData.currentTurnPlayerId,
-                            unoData.playerOrderIds,
-                            unoData.state.direction,
-                            unoData.players,
-                            1
-                        );
 
                         unoData.currentTurnPlayerId = nextTurnId;
+                        unoData.state.activePhase = "draw_pending";
+                        unoData.state.activePhaseData = {
+                            phase: "draw_pending",
+                            drawAmount: unoData.drawStack,
+                            drawType: "draw4"
+                        };
                     } else {
                         const nextTurnId = getNextPlayerIndex(
                             unoData.currentTurnPlayerId,
@@ -448,10 +489,9 @@ export class UnoHandler implements IGameModeHandler {
                             unoData.players
                         );
                         unoData.currentTurnPlayerId = nextTurnId;
+                        unoData.state.activePhase = "play";
+                        unoData.state.activePhaseData = { phase: "play" };
                     }
-
-                    unoData.state.activePhase = "play";
-                    unoData.state.activePhaseData = { phase: "play" };
 
                     broadcastState(ctx, unoData);
                     break;
@@ -466,8 +506,9 @@ export class UnoHandler implements IGameModeHandler {
                         return;
                     }
 
-                    if (unoData.state.activePhaseData.phase !== "play") {
-                        console.warn(`[Uno Handler] uno:draw_card called when phase is not play`);
+                    const drawPhase = unoData.state.activePhaseData.phase;
+                    if (drawPhase !== "play" && drawPhase !== "draw_pending") {
+                        console.warn(`[Uno Handler] uno:draw_card called when phase is ${drawPhase}`);
                         return;
                     }
 
@@ -476,7 +517,12 @@ export class UnoHandler implements IGameModeHandler {
                         return;
                     }
 
-                    drawCards(unoData, String(ctx.userId), 1);
+                    if (drawPhase === "draw_pending") {
+                        drawCards(unoData, String(ctx.userId), unoData.drawStack);
+                        unoData.drawStack = 0;
+                    } else {
+                        drawCards(unoData, String(ctx.userId), 1);
+                    }
 
                     const nextTurnId = getNextPlayerIndex(
                         unoData.currentTurnPlayerId,

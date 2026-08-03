@@ -181,7 +181,7 @@ export default function GamePage() {
 
   const UNOFN: UNO_FN = {
     start: (rules: UNOGameRules) => { wsRef.current?.send({ type: 'uno:start_round', payload: { gameId: id, rules } }) },
-    playCard: (cardId: string) => { wsRef.current?.send({ type: 'uno:play_card', payload: { gameId: id, cardId } }) },
+    playCard: (cardIds: string[]) => { wsRef.current?.send({ type: 'uno:play_card', payload: { gameId: id, cardIds } }) },
     drawCard: () => { wsRef.current?.send({ type: 'uno:draw_card', payload: { gameId: id } }) },
     sayUno: () => { wsRef.current?.send({ type: 'uno:say_uno', payload: { gameId: id } }) },
     chooseColor: (color: 'red' | 'green' | 'blue' | 'yellow') => { wsRef.current?.send({ type: 'uno:choose_color', payload: { gameId: id, color } }) },
