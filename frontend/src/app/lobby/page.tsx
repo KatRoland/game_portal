@@ -37,6 +37,11 @@ export default function LobbyPage() {
 				}
 			})
 
+			wsRef.current.on('lobby:welcome', (payload: { id: string, name: string | null }) => {
+				console.log('Welcome to lobby server:', payload);
+				try { wsRef.current?.send({ type: 'lobby:list' }) } catch (e) { console.error(e) }
+			})
+
 			wsRef.current.on('lobby:created', (payload: Lobby) => {
 				setLobbies(prev => {
 					if (prev.find(l => l.id === payload.id)) return prev

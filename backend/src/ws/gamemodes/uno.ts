@@ -116,6 +116,7 @@ function applyPendingDrawOrSetPhase(
 
 function clearGameState(unoData: UNO): void {
     unoData.currentTurnPlayerId = "";
+    unoData.lastPlayedPlayerId = "";
     unoData.playerOrderIds = [];
     unoData.topCard = null;
     unoData.drawPile = [];
@@ -147,12 +148,58 @@ function checkIfEnd(ctx: GameModeContext, unoData: UNO): boolean {
     return false;
 }
 
-function broadcastState(ctx: GameModeContext, unoData: UNO): void {
+function sanitizeUnoDataForPlayer(unoData: UNO, targetUserId: string): UNO {
+    const sanitizedPlayers: { [playerId: string]: UNOPlayer } = {};
+    for (const [pId, player] of Object.entries(unoData.players || {})) {
+        if (pId === targetUserId) {
+            sanitizedPlayers[pId] = player;
+        } else {
+            sanitizedPlayers[pId] = {
+                ...player,
+                cards: (player.cards || []).map(() => ({
+                    id: null,
+                    type: null,
+                    color: null,
+                    value: null,
+                })),
+            };
+        }
+    }
+
+    return {
+        ...unoData,
+        drawPile: (unoData.drawPile || []).map(() => ({
+            type: null,
+            color: null,
+            value: null,
+        })),
+        backLog: [],
+        players: sanitizedPlayers,
+    };
+}
+
+function broadcastState(ctx: GameModeContext, unoData: UNO, messageType: string = "uno:update_game_state"): void {
     ctx.game.currentGameModeData = unoData;
-    ctx.broadcast({
-        type: "uno:update_game_state",
-        payload: { unoData }
-    });
+
+    const lobbyPlayers = ctx.game.lobby?.players || [];
+    const playerIds = new Set<string>();
+
+    for (const p of lobbyPlayers) {
+        if (p.id !== undefined && p.id !== null) {
+            playerIds.add(String(p.id));
+        }
+    }
+    for (const pId of Object.keys(unoData.players || {})) {
+        playerIds.add(pId);
+    }
+
+    for (const targetUserId of playerIds) {
+        const sanitized = sanitizeUnoDataForPlayer(unoData, targetUserId);
+        ctx.sendToUser(targetUserId, {
+            type: messageType,
+            payload: { unoData: sanitized }
+        });
+    }
 }
 
 export class UnoHandler implements IGameModeHandler {
@@ -230,6 +277,7 @@ export class UnoHandler implements IGameModeHandler {
                         ...unoData,
                         gameRules: activeRules,
                         currentTurnPlayerId: playerOrderIds[0],
+                        lastPlayedPlayerId: "",
                         playerOrderIds: playerOrderIds,
                         topCard: topCard,
                         drawPile: currentDeck,
@@ -244,14 +292,7 @@ export class UnoHandler implements IGameModeHandler {
                             activePhaseData: { phase: "play" }
                         }
                     };
-                    ctx.game.currentGameModeData = newUnoState;
-
-                    ctx.broadcast({
-                        type: "uno:round_started",
-                        payload: {
-                            unoData: newUnoState
-                        }
-                    });
+                    broadcastState(ctx, newUnoState, "uno:round_started");
                     break;
                 }
 
@@ -321,7 +362,8 @@ export class UnoHandler implements IGameModeHandler {
                         if (!unoData.topCard ||
                             firstCard.type !== unoData.topCard.type ||
                             firstCard.color !== unoData.topCard.color ||
-                            firstCard.value !== unoData.topCard.value) {
+                            firstCard.value !== unoData.topCard.value ||
+                            playerId === unoData.lastPlayedPlayerId) {
                             ctx.send({ type: "uno:error", payload: { notificationLevel: "modal", message: "not_your_turn" } });
                             return;
                         }
@@ -357,7 +399,8 @@ export class UnoHandler implements IGameModeHandler {
 
                     const cardIdSet = new Set(cardIds);
                     const hadCardsBefore = currentPlayer.cards.length;
-                    currentPlayer.cards = currentPlayer.cards.filter(c => !cardIdSet.has(c.id));
+                    currentPlayer.cards = currentPlayer.cards.filter(c => !cardIdSet.has(c.id as string));
+                    unoData.lastPlayedPlayerId = playerId;
 
                     if (
                         unoData.gameRules.uno &&
@@ -391,9 +434,12 @@ export class UnoHandler implements IGameModeHandler {
                             const baseAmount = 4;
                             if (unoData.gameRules.drawStackingMode === "multiply") {
                                 unoData.drawStack = Math.max(unoData.drawStack, 1);
+                                if (unoData.drawStack > 16384) unoData.drawStack = 16384;
+
                                 for (let i = 0; i < count; i++) unoData.drawStack *= baseAmount;
                             } else {
                                 unoData.drawStack += count * baseAmount;
+                                if (unoData.drawStack > 16384) unoData.drawStack = 16384;
                             }
                         }
 
@@ -411,9 +457,12 @@ export class UnoHandler implements IGameModeHandler {
                         const baseAmount = 2;
                         if (unoData.gameRules.drawStackingMode === "multiply") {
                             unoData.drawStack = Math.max(unoData.drawStack, 1);
+                            if (unoData.drawStack > 16384) unoData.drawStack = 16384;
+
                             for (let i = 0; i < count; i++) unoData.drawStack *= baseAmount;
                         } else {
                             unoData.drawStack += count * baseAmount;
+                            if (unoData.drawStack > 16384) unoData.drawStack = 16384;
                         }
 
                         const nextTurnId = getNextPlayerIndex(
@@ -572,6 +621,7 @@ export class UnoHandler implements IGameModeHandler {
                         unoData.backLog.push(unoData.topCard);
                     }
                     unoData.topCard = resolvedCard;
+                    unoData.lastPlayedPlayerId = String(ctx.userId);
 
                     const currentPlayer = unoData.players[String(ctx.userId)];
 
@@ -633,6 +683,9 @@ export class UnoHandler implements IGameModeHandler {
                     const drawPlayer = unoData.players[String(ctx.userId)];
 
                     if (drawPhase === "draw_pending") {
+                        if (unoData.drawStack > 16384) {
+                            unoData.drawStack = 16384;
+                        }
                         drawCards(unoData, String(ctx.userId), unoData.drawStack);
                         unoData.drawStack = 0;
                     } else {

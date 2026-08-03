@@ -238,13 +238,13 @@ export interface KDFN extends KSFN {
 }
 
 export interface UNOCard {
-  type: "number" | "wild" | "skip" | "reverse" | "draw2" | "draw4";
-  color: "red" | "green" | "blue" | "yellow" | "wild";
-  value: number | "wild" | "skip" | "reverse" | "draw2" | "draw4";
+  type: "number" | "wild" | "skip" | "reverse" | "draw2" | "draw4" | null;
+  color: "red" | "green" | "blue" | "yellow" | "wild" | null;
+  value: number | "wild" | "skip" | "reverse" | "draw2" | "draw4" | null;
 }
 
 export interface UNOCardInHand extends UNOCard {
-  id: string;
+  id: string | null;
 }
 
 export interface UNOPlayer {
@@ -278,6 +278,7 @@ export type UNOPhaseData =
 
 export interface UNOState {
   currentTurnPlayerId: string;
+  lastPlayedPlayerId?: string;
   playerOrderIds: string[];
   topCard: UNOCard;
   drawPile: UNOCard[];

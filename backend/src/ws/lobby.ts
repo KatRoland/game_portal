@@ -181,6 +181,7 @@ class LobbyServer {
       }
 
       case "lobby:list": {
+        console.log(`lobby:list ${id}`);
         const clientInfo = this.clients.get(id);
         if (clientInfo) {
           if (this.Lobbies.find(l => l.players.find(p => p.id === clientInfo.user?.id))) {

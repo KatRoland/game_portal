@@ -82,7 +82,7 @@ function CardFlyAnimation({ anim, onDone }: { anim: CardAnimation; onDone: () =>
     yellow: 'rgba(234,179,8,0.7)',
     wild: 'rgba(168,85,247,0.7)',
   };
-  const glowColor = cardColorMap[anim.card.color] || 'rgba(255,255,255,0.5)';
+  const glowColor = (anim.card.color && cardColorMap[anim.card.color]) || 'rgba(255,255,255,0.5)';
 
   return (
     <div
@@ -728,53 +728,55 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
           </div>
         </div>
 
-        <div className="mb-8 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-5 shadow-lg">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-base font-semibold text-white">
-                {isHost ? 'Host Controls' : 'Game Controls'}
-              </h2>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                onClick={() => endGameMode()}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-sm font-semibold shadow-lg shadow-red-900/30 hover:shadow-red-900/50 transition-all active:scale-95"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  className="w-4 h-4"
+        {isHost && (
+          <div className="mb-8 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-5 shadow-lg">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-base font-semibold text-white">
+                  Host Controls
+                </h2>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={() => endGameMode()}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white text-sm font-semibold shadow-lg shadow-red-900/30 hover:shadow-red-900/50 transition-all active:scale-95"
                 >
-                  <path
-                    fillRule="evenodd"
-                    d="M5.47 5.47a.75.75 0 011.06 0L12 10.94l5.47-5.47a.75.75 0 111.06 1.06L13.06 12l5.47 5.47a.75.75 0 11-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 01-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 010-1.06z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                End Gamemode
-              </button>
-              <button
-                onClick={() => endGame()}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 border border-white/10 text-white text-sm font-semibold shadow-lg hover:border-white/20 transition-all active:scale-95"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  className="w-4 h-4 text-gray-300"
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    className="w-4 h-4"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M5.47 5.47a.75.75 0 011.06 0L12 10.94l5.47-5.47a.75.75 0 111.06 1.06L13.06 12l5.47 5.47a.75.75 0 11-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 01-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 010-1.06z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  End Gamemode
+                </button>
+                <button
+                  onClick={() => endGame()}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 border border-white/10 text-white text-sm font-semibold shadow-lg hover:border-white/20 transition-all active:scale-95"
                 >
-                  <path
-                    fillRule="evenodd"
-                    d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zm-1.72 6.97a.75.75 0 10-1.06 1.06L10.94 12l-1.72 1.72a.75.75 0 101.06 1.06L12 13.06l1.72 1.72a.75.75 0 101.06-1.06L13.06 12l1.72-1.72a.75.75 0 10-1.06-1.06L12 10.94l-1.72-1.72z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                End Game
-              </button>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    className="w-4 h-4 text-gray-300"
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zm-1.72 6.97a.75.75 0 10-1.06 1.06L10.94 12l-1.72 1.72a.75.75 0 101.06 1.06L12 13.06l1.72 1.72a.75.75 0 101.06-1.06L13.06 12l1.72-1.72a.75.75 0 10-1.06-1.06L12 10.94l-1.72-1.72z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                  End Game
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {activeScreen === 'lobby' && (
           <div className="space-y-8 animate-fadeIn">
@@ -1092,13 +1094,13 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                         className="w-24 h-36 rounded-xl shadow-2xl transform hover:scale-105 transition-transform object-contain filter drop-shadow-xl cursor-pointer"
                         style={topCardLanding ? {
                           animation: 'unoTopCardLand 700ms ease-out forwards',
-                          ['--land-glow' as string]: {
+                          ['--land-glow' as string]: (topCard.color && ({
                             red: 'rgba(239,68,68,0.6)',
                             blue: 'rgba(59,130,246,0.6)',
                             green: 'rgba(34,197,94,0.6)',
                             yellow: 'rgba(234,179,8,0.6)',
                             wild: 'rgba(168,85,247,0.6)',
-                          }[topCard.color] || 'rgba(255,255,255,0.4)',
+                          } as Record<string, string>)[topCard.color]) || 'rgba(255,255,255,0.4)',
                         } : undefined}
                       />
                     ) : (
@@ -1128,14 +1130,7 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                 </div>
 
                 <div className="flex flex-col items-end">
-                  {isHost && (
-                    <button
-                      onClick={() => setActiveScreen('end')}
-                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-sm font-bold shadow-lg shadow-purple-900/40 transition-all"
-                    >
-                      End Round →
-                    </button>
-                  )}
+
                 </div>
               </div>
             </div>
@@ -1187,11 +1182,13 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                 <div className="flex flex-wrap items-end gap-6 pt-4 pb-2">
                   {groupedUserHand.map((group) => {
                     const stackCount = group.cards.length;
+                    const visibleCount = Math.min(stackCount, 5);
+                    const visibleCards = group.cards.slice(0, visibleCount);
                     const offsetPx = 14;
                     const baseWidth = 84;
                     const baseHeight = 124;
-                    const totalWidth = baseWidth + (stackCount - 1) * offsetPx;
-                    const totalHeight = baseHeight + (stackCount - 1) * offsetPx;
+                    const totalWidth = baseWidth + (visibleCount - 1) * offsetPx;
+                    const totalHeight = baseHeight + (visibleCount - 1) * offsetPx;
 
                     return (
                       <div
@@ -1205,8 +1202,8 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                           height: `${totalHeight}px`,
                         }}
                       >
-                        {group.cards.map((card, idx) => {
-                          const isTopCard = idx === stackCount - 1;
+                        {visibleCards.map((card, idx) => {
+                          const isTopCard = idx === visibleCount - 1;
                           return (
                             <div
                               key={card.id || idx}
@@ -1226,7 +1223,7 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                                 <span
                                   onClick={rules.canPlayMultipleCards ? (e) => {
                                     e.stopPropagation();
-                                    const ids = group.cards.map(c => c.id).filter(Boolean);
+                                    const ids = group.cards.map(c => c.id).filter((id): id is string => Boolean(id));
                                     if (ids.length > 0) handlePlayCard(ids);
                                   } : undefined}
                                   className={`absolute -top-2 -right-2 bg-yellow-400 text-gray-950 text-xs font-black px-2 py-0.5 rounded-full shadow-lg border border-yellow-300 z-20${rules.canPlayMultipleCards ? ' cursor-pointer hover:bg-green-400 hover:scale-110 hover:border-green-300 transition-all' : ''

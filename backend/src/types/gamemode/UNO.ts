@@ -8,13 +8,13 @@ export interface UNOPlayer {
 }
 
 export interface UNOCard {
-    type: "number" | "wild" | "skip" | "reverse" | "draw2" | "draw4";
-    color: "red" | "green" | "blue" | "yellow" | "wild";
-    value: number | "wild" | "skip" | "reverse" | "draw2" | "draw4";
+    type: "number" | "wild" | "skip" | "reverse" | "draw2" | "draw4" | null;
+    color: "red" | "green" | "blue" | "yellow" | "wild" | null;
+    value: number | "wild" | "skip" | "reverse" | "draw2" | "draw4" | null;
 }
 
 export interface UNOCardInHand extends UNOCard {
-    id: string;
+    id: string | null;
 }
 
 export type UNOPhase = "lobby" | "draw" | "play" | "choose_color" | "draw_pending" | "round_ended";
@@ -42,6 +42,7 @@ export type UNOPhaseData =
 
 export interface UNO {
     currentTurnPlayerId: string;
+    lastPlayedPlayerId?: string;
     playerOrderIds: string[];
     topCard: UNOCard | null;
     drawPile: UNOCard[];

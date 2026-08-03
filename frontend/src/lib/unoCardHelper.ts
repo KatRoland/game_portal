@@ -1,7 +1,7 @@
 import { UNOCard } from '@/types';
 
 export function getUNOCardImagePath(card: UNOCard | null | undefined): string {
-  if (!card) {
+  if (!card || !card.color || !card.type) {
     return '/cards/uno/back.svg';
   }
 
