@@ -48,7 +48,7 @@
     <rect x="14" y="14" width="212" height="332" rx="16" ry="16" fill="none" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
   
   
-    <!-- Central Tilted White Oval -->
+    <!-- Central Tilted White/Colored Oval -->
     <ellipse cx="120" cy="180" rx="76" ry="112" transform="rotate(-25 120 180)" fill="url(#oval-grad-green_skip)" stroke="#FFFFFF" stroke-width="3" filter="url(#oval-shadow-green_skip)"/>
   
   

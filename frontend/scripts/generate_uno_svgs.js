@@ -113,10 +113,11 @@ function renderCardFrame(colorName, cardId) {
   `;
 }
 
-function renderWhiteOval(cardId) {
+function renderWhiteOval(cardId, ovalColor = null) {
+  const fill = ovalColor && COLORS[ovalColor] ? `url(#${ovalColor}-grad-${cardId})` : `url(#oval-grad-${cardId})`;
   return `
-    <!-- Central Tilted White Oval -->
-    <ellipse cx="120" cy="180" rx="76" ry="112" transform="rotate(-25 120 180)" fill="url(#oval-grad-${cardId})" stroke="#FFFFFF" stroke-width="3" filter="url(#oval-shadow-${cardId})"/>
+    <!-- Central Tilted White/Colored Oval -->
+    <ellipse cx="120" cy="180" rx="76" ry="112" transform="rotate(-25 120 180)" fill="${fill}" stroke="#FFFFFF" stroke-width="3" filter="url(#oval-shadow-${cardId})"/>
   `;
 }
 
@@ -258,8 +259,8 @@ function generateDraw2Card(color) {
 }
 
 // Generate Card: Wild
-function generateWildCard() {
-  const cardId = 'wild';
+function generateWildCard(selectedColor = null) {
+  const cardId = selectedColor ? `wild_${selectedColor}` : 'wild';
 
   const cornerContent = `
     <g transform="scale(${CONFIG.cornerIconScale})">
@@ -288,15 +289,15 @@ function generateWildCard() {
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 360" width="240" height="360">
   ${getCommonDefs(cardId)}
   ${renderCardFrame('wild', cardId)}
-  ${renderWhiteOval(cardId)}
+  ${renderWhiteOval(cardId, selectedColor)}
   ${centerContent}
   ${renderCornerIndices(cornerContent)}
 </svg>`;
 }
 
 // Generate Card: Wild Draw 4
-function generateWildDraw4Card() {
-  const cardId = 'wild_draw4';
+function generateWildDraw4Card(selectedColor = null) {
+  const cardId = selectedColor ? `wild_draw4_${selectedColor}` : 'wild_draw4';
   const fontSize = CONFIG.cornerActionFontSize;
 
   const cornerContent = `
@@ -320,7 +321,7 @@ function generateWildDraw4Card() {
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 360" width="240" height="360">
   ${getCommonDefs(cardId)}
   ${renderCardFrame('wild', cardId)}
-  ${renderWhiteOval(cardId)}
+  ${renderWhiteOval(cardId, selectedColor)}
   ${centerContent}
   ${renderCornerIndices(cornerContent)}
 </svg>`;
@@ -391,6 +392,22 @@ fs.writeFileSync(path.join(outputDir, 'wild_wild.svg'), generateWildCard()); // 
 fs.writeFileSync(path.join(outputDir, 'wild_draw4.svg'), generateWildDraw4Card());
 fs.writeFileSync(path.join(outputDir, 'draw4.svg'), generateWildDraw4Card()); // Alias
 count += 4;
+
+// Wild colored variants (after color selection, center oval is colored instead of white)
+['red', 'green', 'blue', 'yellow'].forEach((c) => {
+  const wildSvg = generateWildCard(c);
+  const wildDraw4Svg = generateWildDraw4Card(c);
+
+  fs.writeFileSync(path.join(outputDir, `wild_${c}.svg`), wildSvg);
+  fs.writeFileSync(path.join(outputDir, `${c}_wild.svg`), wildSvg);
+
+  fs.writeFileSync(path.join(outputDir, `wild_draw4_${c}.svg`), wildDraw4Svg);
+  fs.writeFileSync(path.join(outputDir, `${c}_wild_draw4.svg`), wildDraw4Svg);
+  fs.writeFileSync(path.join(outputDir, `${c}_draw4.svg`), wildDraw4Svg);
+  fs.writeFileSync(path.join(outputDir, `draw4_${c}.svg`), wildDraw4Svg);
+
+  count += 6;
+});
 
 // Card Back
 const backSvg = generateCardBack();

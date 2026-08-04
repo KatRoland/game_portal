@@ -1430,7 +1430,7 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                                         }`}
                                       title={rules.canPlayMultipleCards ? `Play all ${stackCount}` : `${stackCount} cards`}
                                     >
-                                      {rules.canPlayMultipleCards ? `▶ ×${stackCount}` : `×${stackCount}`}
+                                      {rules.canPlayMultipleCards ? `×${stackCount}` : `×${stackCount}`}
                                     </span>
                                   )}
                                 </div>
