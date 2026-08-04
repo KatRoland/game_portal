@@ -313,10 +313,46 @@ const DEFAULT_RULES: UNOGameRules = {
 };
 
 function groupHandCards(cards: UNOCardInHand[]) {
+  const sortedCards = [...cards].sort((a, b) => {
+    const colorOrder: Record<string, number> = {
+      red: 1,
+      blue: 2,
+      green: 3,
+      yellow: 4,
+      black: 5,
+    };
+    const typeOrder: Record<string, number> = {
+      number: 1,
+      skip: 2,
+      reverse: 3,
+      draw2: 4,
+      wild: 5,
+      draw4: 6,
+    };
+
+    const colorA = colorOrder[a.color || ''] || 99;
+    const colorB = colorOrder[b.color || ''] || 99;
+    if (colorA !== colorB) return colorA - colorB;
+
+    const typeA = typeOrder[a.type || ''] || 99;
+    const typeB = typeOrder[b.type || ''] || 99;
+    if (typeA !== typeB) return typeA - typeB;
+
+    if (a.type === 'number' && b.type === 'number') {
+      const numA = Number(a.value);
+      const numB = Number(b.value);
+      if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+        return numA - numB;
+      }
+    }
+
+    return String(a.value).localeCompare(String(b.value));
+  });
+
   const groups: { key: string; cards: UNOCardInHand[] }[] = [];
   const map = new Map<string, UNOCardInHand[]>();
 
-  cards.forEach((card) => {
+  sortedCards.forEach((card) => {
     const key = `${card.color}-${card.type}-${card.value}`;
     if (!map.has(key)) {
       map.set(key, []);
@@ -1173,26 +1209,33 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                 </div>
 
                 <div className="flex flex-col items-end">
-
                 </div>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-6 shadow-xl" ref={myHandElRef}>
-              <div className="flex items-center justify-between mb-4">
+            <div className="relative mt-4 pt-2 pb-12 select-none" ref={myHandElRef}>
+              <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-yellow-500/10 via-black/20 to-transparent pointer-events-none blur-2xl"></div>
+
+              <div className="flex items-center justify-between w-full max-w-4xl mx-auto mb-4 px-6 py-3 rounded-full bg-black/60 border border-white/15 backdrop-blur-md shadow-2xl">
                 <div className="flex items-center gap-3">
-                  <h3 className="text-base font-bold text-white">
-                    Your Hand ({userHand.length} Cards Total)
-                  </h3>
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse"></span>
+                    <span className="text-sm font-black text-white uppercase tracking-wider">
+                      Your Hand
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full bg-yellow-400/20 border border-yellow-400/30 text-yellow-300 font-extrabold text-xs">
+                      {userHand.length} {userHand.length === 1 ? 'Card' : 'Cards'}
+                    </span>
+                  </div>
                   {userPlayerData?.hasSaidUno && (
-                    <span className="px-2.5 py-1 rounded-full bg-gradient-to-r from-red-600 to-rose-600 text-[10px] font-black text-white uppercase tracking-wider shadow-lg shadow-red-900/40 animate-pulse border border-red-400/40">
+                    <span className="px-3 py-1 rounded-full bg-gradient-to-r from-red-600 to-rose-600 text-[10px] font-black text-white uppercase tracking-wider shadow-lg shadow-red-900/40 animate-pulse border border-red-400/40">
                       UNO!
                     </span>
                   )}
                 </div>
                 {rules.uno && (
                   userPlayerData?.hasSaidUno ? (
-                    <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600/20 border border-emerald-500/40 text-emerald-300">
+                    <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 shadow-lg">
                       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
                         <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clipRule="evenodd" />
                       </svg>
@@ -1201,7 +1244,7 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                   ) : userHand.length === 2 ? (
                     <button
                       onClick={handleSayUno}
-                      className="relative px-5 py-2.5 rounded-xl bg-gradient-to-r from-red-600 via-rose-500 to-red-600 hover:from-red-500 hover:via-rose-400 hover:to-red-500 text-white font-black text-sm uppercase tracking-wider shadow-xl shadow-red-900/50 transition-all active:scale-95 hover:scale-105 animate-pulse"
+                      className="relative px-5 py-2 rounded-full bg-gradient-to-r from-red-600 via-rose-500 to-red-600 hover:from-red-500 hover:via-rose-400 hover:to-red-500 text-white font-black text-xs uppercase tracking-wider shadow-xl shadow-red-900/50 transition-all active:scale-95 hover:scale-105 animate-pulse"
                     >
                       <span className="absolute -top-1 -right-1 flex h-3 w-3">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
@@ -1213,7 +1256,7 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                     <button
                       onClick={handleSayUno}
                       disabled={userHand.length > 2}
-                      className="px-4 py-2 rounded-xl bg-red-600/50 hover:bg-red-600 disabled:bg-gray-700/50 disabled:text-gray-500 disabled:cursor-not-allowed text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-red-900/20 transition-all active:scale-95"
+                      className="px-4 py-1.5 rounded-full bg-red-600/50 hover:bg-red-600 disabled:bg-gray-800/40 disabled:text-gray-500 disabled:border-transparent disabled:cursor-not-allowed text-white font-black text-xs uppercase tracking-wider shadow-lg transition-all active:scale-95 border border-white/10"
                     >
                       Say UNO!
                     </button>
@@ -1222,69 +1265,83 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
               </div>
 
               {userHand.length > 0 ? (
-                <div className="flex flex-wrap items-end gap-6 pt-4 pb-2">
-                  {groupedUserHand.map((group) => {
-                    const stackCount = group.cards.length;
-                    const visibleCount = Math.min(stackCount, 5);
-                    const visibleCards = group.cards.slice(0, visibleCount);
-                    const offsetPx = 14;
-                    const baseWidth = 84;
-                    const baseHeight = 124;
-                    const totalWidth = baseWidth + (visibleCount - 1) * offsetPx;
-                    const totalHeight = baseHeight + (visibleCount - 1) * offsetPx;
+                (() => {
+                  const totalGroups = groupedUserHand.length;
+                  const maxVisiblePerStack = totalGroups > 8 ? 2 : 5;
+                  const overlapPx = totalGroups <= 6 ? 0 : Math.min(20, Math.round((totalGroups - 6) * 3));
 
-                    return (
-                      <div
-                        key={group.key}
-                        onClick={() => {
-                          if (group.cards[0]?.id) handlePlayCard([group.cards[0].id]);
-                        }}
-                        className="relative transition-transform hover:-translate-y-2 cursor-pointer select-none group"
-                        style={{
-                          width: `${totalWidth}px`,
-                          height: `${totalHeight}px`,
-                        }}
-                      >
-                        {visibleCards.map((card, idx) => {
-                          const isTopCard = idx === visibleCount - 1;
-                          return (
-                            <div
-                              key={card.id || idx}
-                              className="absolute w-20 h-28 transform transition-transform filter drop-shadow-md"
-                              style={{
-                                top: `${idx * offsetPx}px`,
-                                left: `${idx * offsetPx}px`,
-                                zIndex: idx + 1,
-                              }}
-                            >
-                              <img
-                                src={getUNOCardImagePath(card)}
-                                alt={`${card.color} ${card.value}`}
-                                className="w-full h-full object-contain pointer-events-none rounded-lg"
-                              />
-                              {isTopCard && stackCount > 1 && (
-                                <span
-                                  onClick={rules.canPlayMultipleCards ? (e) => {
-                                    e.stopPropagation();
-                                    const ids = group.cards.map(c => c.id).filter((id): id is string => Boolean(id));
-                                    if (ids.length > 0) handlePlayCard(ids);
-                                  } : undefined}
-                                  className={`absolute -top-2 -right-2 bg-yellow-400 text-gray-950 text-xs font-black px-2 py-0.5 rounded-full shadow-lg border border-yellow-300 z-20${rules.canPlayMultipleCards ? ' cursor-pointer hover:bg-green-400 hover:scale-110 hover:border-green-300 transition-all' : ''
-                                    }`}
-                                  title={rules.canPlayMultipleCards ? `Play all ${stackCount}` : `${stackCount} cards`}
+                  return (
+                    <div className="relative z-10 flex flex-wrap items-end justify-center gap-y-5 w-[80vw] left-1/2 -translate-x-1/2 overflow-visible pt-12 pb-4 px-4 min-h-[150px]">
+                      {groupedUserHand.map((group, idx) => {
+                        const stackCount = group.cards.length;
+                        const visibleCount = Math.min(stackCount, maxVisiblePerStack);
+                        const visibleCards = group.cards.slice(0, visibleCount);
+                        const offsetPx = 10;
+                        const baseWidth = 84;
+                        const baseHeight = 124;
+                        const totalWidth = baseWidth + (visibleCount - 1) * offsetPx;
+                        const totalHeight = baseHeight + (visibleCount - 1) * offsetPx;
+                        const mlStyle = idx === 0 ? 0 : overlapPx > 0 ? -overlapPx : 12;
+
+                        return (
+                          <div
+                            key={group.key}
+                            onClick={() => {
+                              if (group.cards[0]?.id) handlePlayCard([group.cards[0].id]);
+                            }}
+                            className="relative transition-all duration-300 ease-out cursor-pointer select-none group/handCard hover:-translate-y-10 hover:scale-125 hover:z-[100] focus-within:z-[100]"
+                            style={{
+                              width: `${totalWidth}px`,
+                              height: `${totalHeight}px`,
+                              marginLeft: `${mlStyle}px`,
+                              zIndex: idx + 1,
+                            }}
+                          >
+                            {visibleCards.map((card, cardIdx) => {
+                              const isTopCard = cardIdx === visibleCount - 1;
+                              return (
+                                <div
+                                  key={card.id || cardIdx}
+                                  className="absolute w-20 h-28 transform transition-all duration-300 filter drop-shadow-md group-hover/handCard:drop-shadow-[0_0_20px_rgba(250,204,21,0.9)] group-hover/handCard:brightness-110"
+                                  style={{
+                                    top: `${cardIdx * offsetPx}px`,
+                                    left: `${cardIdx * offsetPx}px`,
+                                    zIndex: cardIdx + 1,
+                                  }}
                                 >
-                                  {rules.canPlayMultipleCards ? `▶ ×${stackCount}` : `×${stackCount}`}
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
+                                  <img
+                                    src={getUNOCardImagePath(card)}
+                                    alt={`${card.color} ${card.value}`}
+                                    className="w-full h-full object-contain pointer-events-none rounded-xl"
+                                  />
+                                  {isTopCard && stackCount > 1 && (
+                                    <span
+                                      onClick={rules.canPlayMultipleCards ? (e) => {
+                                        e.stopPropagation();
+                                        const ids = group.cards.map(c => c.id).filter((id): id is string => Boolean(id));
+                                        if (ids.length > 0) handlePlayCard(ids);
+                                      } : undefined}
+                                      className={`absolute -top-2.5 -right-2.5 bg-yellow-400 text-gray-950 text-xs font-black px-2 py-0.5 rounded-full shadow-lg border border-yellow-300 z-20${
+                                        rules.canPlayMultipleCards ? ' cursor-pointer hover:bg-green-400 hover:scale-110 hover:border-green-300 transition-all' : ''
+                                      }`}
+                                      title={rules.canPlayMultipleCards ? `Play all ${stackCount}` : `${stackCount} cards`}
+                                    >
+                                      {rules.canPlayMultipleCards ? `▶ ×${stackCount}` : `×${stackCount}`}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()
               ) : (
-                <p className="text-sm text-gray-400 py-4">No cards in your hand.</p>
+                <div className="flex items-center justify-center py-10 text-sm font-semibold text-gray-400/60 border border-dashed border-white/10 rounded-2xl">
+                  No cards in your hand.
+                </div>
               )}
             </div>
           </div>
