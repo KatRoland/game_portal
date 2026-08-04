@@ -307,3 +307,20 @@ export interface UNO_FN {
   restartGame: () => void
   settingsChanged: (gameId: string, rules: UNOGameRules) => void
 }
+
+export interface ChatUser {
+  id: number;
+  username: string;
+  avatar?: string | null;
+  customAvatar?: boolean;
+  customAvatarUrl?: string | null;
+  isAdmin?: boolean;
+}
+
+export interface SiteChatMessage {
+  id: number;
+  content: string;
+  createdAt: string;
+  channel?: string;
+  user: ChatUser;
+}

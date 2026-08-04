@@ -11,6 +11,7 @@ import fileRoutes from "./routes/file";
 import imageRoundRoutes from "./routes/imgr"
 import sopPlaylistRoutes from "./routes/sopplaylist"
 import karaokeRouter from "./routes/karaoke"
+import chatRoutes from "./routes/chat"
 
 const app = express();
 
@@ -88,5 +89,6 @@ app.use("/karaoke", karaokeRouter)
 
 app.use("/imgr", imageRoundRoutes)
 app.use("/sop", sopPlaylistRoutes)
+app.use("/chat", chatRoutes)
 
 export default app;

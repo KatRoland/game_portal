@@ -18,9 +18,10 @@ model User {
   email           String?
   customAvatar    Boolean   @default(false)
   customAvatarUrl String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
   sessions        Session[]
+  chatMessages    ChatMessage[]
 }
 
 model Session {
@@ -124,4 +125,16 @@ model SopPlaylistItem {
   playlistId Int
 
   @@index([playlistId])
+}
+
+model ChatMessage {
+  id        Int      @id @default(autoincrement())
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    Int
+  channel   String   @default("general")
+
+  @@index([createdAt])
+  @@index([channel, createdAt])
 }

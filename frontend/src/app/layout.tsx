@@ -3,6 +3,8 @@ import React from 'react'
 import Header from '@/components/Header'
 import { UserProvider } from '@/contexts/UserContext'
 import { MicProvider } from '@/contexts/MicContext'
+import { ChatProvider } from '@/contexts/ChatContext'
+import ChatWidget from '@/components/ChatWidget'
 
 export const metadata = {
   title: 'Game Portal',
@@ -20,13 +22,15 @@ export default function RootLayout({
         <div className="min-h-screen flex flex-col">
           <UserProvider>
             <MicProvider>
-              <Header />
-              <main className="flex-1 flex flex-col">
-                {children}
-              </main>
+              <ChatProvider>
+                <Header />
+                <main className="flex-1 flex flex-col">
+                  {children}
+                </main>
+                <ChatWidget />
+              </ChatProvider>
             </MicProvider>
           </UserProvider>
-
         </div>
       </body>
     </html>

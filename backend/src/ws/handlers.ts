@@ -2,6 +2,7 @@ import type WebSocket from "ws";
 import type http from "http";
 import { lobbyServer } from "./lobby";
 import { gameServer } from "./game";
+import { chatServer } from "./chat";
 import { Lobby } from "../types/Lobby";
 
 
@@ -11,6 +12,7 @@ export function handleWsConnection(ws: WebSocket, req: http.IncomingMessage) {
 
   if (req.url?.startsWith('/lobby')) lobbyServer.register(ws, req);
   else if (req.url?.startsWith("/game")) gameServer.register(ws, req);
+  else if (req.url?.startsWith("/chat")) chatServer.register(ws, req);
 }
 
 export function gameInit(gameId: string, lobby: Lobby) {
