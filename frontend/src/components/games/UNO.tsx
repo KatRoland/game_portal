@@ -39,6 +39,9 @@ interface DrawAnimation {
   isSelfDraw: boolean;
   playerName?: string;
   delay: number;
+  duration?: number;
+  totalDrawn?: number;
+  cardIndex?: number;
 }
 
 function AnimationOverlay({
@@ -148,17 +151,39 @@ function CardFlyAnimation({ anim, onDone }: { anim: CardAnimation; onDone: () =>
   );
 }
 
+function getDrawAnimationTiming(cardsDrawn: number) {
+  if (cardsDrawn < 4) {
+    return {
+      visualCount: cardsDrawn,
+      staggerMs: 150,
+      durationMs: 500,
+    };
+  }
+  const visualCount = Math.min(cardsDrawn, 30);
+  const staggerMs = Math.max(12, Math.round(80 * Math.pow(4 / cardsDrawn, 0.6)));
+  const durationMs = Math.max(150, Math.round(380 * Math.pow(4 / cardsDrawn, 0.35)));
+
+  return {
+    visualCount,
+    staggerMs,
+    durationMs,
+  };
+}
+
 function DrawCardFlyAnimation({ anim, onDone }: { anim: DrawAnimation; onDone: () => void }) {
   const [visible, setVisible] = useState(false);
+  const duration = anim.duration || 500;
+  const totalDrawn = anim.totalDrawn || 1;
+  const cardIndex = anim.cardIndex || 0;
 
   useEffect(() => {
     const showTimer = setTimeout(() => setVisible(true), anim.delay);
-    const doneTimer = setTimeout(onDone, anim.delay + 600);
+    const doneTimer = setTimeout(onDone, anim.delay + duration + 100);
     return () => {
       clearTimeout(showTimer);
       clearTimeout(doneTimer);
     };
-  }, [anim.delay, onDone]);
+  }, [anim.delay, duration, onDone]);
 
   if (!visible) return null;
 
@@ -174,7 +199,7 @@ function DrawCardFlyAnimation({ anim, onDone }: { anim: DrawAnimation; onDone: (
         zIndex: 9998,
         width: 64,
         height: 96,
-        animation: 'unoDrawFly 500ms cubic-bezier(0.22, 1, 0.36, 1) forwards',
+        animation: `unoDrawFly ${duration}ms cubic-bezier(0.22, 1, 0.36, 1) forwards`,
         ['--fly-dx' as string]: `${dx}px`,
         ['--fly-dy' as string]: `${dy}px`,
       }}
@@ -185,12 +210,24 @@ function DrawCardFlyAnimation({ anim, onDone }: { anim: DrawAnimation; onDone: (
         className="w-full h-full rounded-lg object-contain"
         style={{ filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.3))' }}
       />
-      {!anim.isSelfDraw && anim.playerName && (
+      {!anim.isSelfDraw && anim.playerName && cardIndex === 0 && (
         <div
-          className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap px-2 py-0.5 rounded-full bg-black/80 border border-white/20 text-[9px] font-bold text-gray-300"
-          style={{ animation: 'unoTagFade 500ms ease forwards' }}
+          className={`absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
+            totalDrawn >= 4
+              ? 'bg-gradient-to-r from-red-600 via-amber-500 to-red-600 text-white border border-yellow-300/60 shadow-lg shadow-red-900/50 animate-pulse'
+              : 'bg-black/80 border border-white/20 text-gray-300'
+          }`}
+          style={{ animation: `unoTagFade ${duration}ms ease forwards` }}
         >
-          {anim.playerName} drew
+          {anim.playerName} drew {totalDrawn >= 4 ? `+${totalDrawn}!` : totalDrawn > 1 ? `+${totalDrawn}` : ''}
+        </div>
+      )}
+      {anim.isSelfDraw && totalDrawn >= 4 && cardIndex === 0 && (
+        <div
+          className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap px-2.5 py-0.5 rounded-full bg-gradient-to-r from-red-600 via-amber-500 to-red-600 text-white font-black text-[10px] border border-yellow-300/60 shadow-lg shadow-red-900/50 animate-pulse"
+          style={{ animation: `unoTagFade ${duration}ms ease forwards` }}
+        >
+          +{totalDrawn} CARDS!
         </div>
       )}
     </div>
@@ -470,8 +507,6 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
   }, [unoState?.topCard?.color, unoState?.topCard?.type, unoState?.topCard?.value, unoState?.currentTurnPlayerId]);
 
   useEffect(() => {
-    const DRAW_STAGGER_MS = 150;
-
     const pileEl = drawPileElRef.current;
     if (!pileEl) {
       prevHandLenRef.current = userHand.length;
@@ -507,7 +542,8 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
         toX = handRect.left + handRect.width / 2 - 32;
         toY = handRect.top + handRect.height / 2 - 48;
       }
-      for (let i = 0; i < cardsDrawn; i++) {
+      const { visualCount, staggerMs, durationMs } = getDrawAnimationTiming(cardsDrawn);
+      for (let i = 0; i < visualCount; i++) {
         newAnims.push({
           id: `draw-self-${Date.now()}-${i}-${Math.random()}`,
           fromX,
@@ -515,7 +551,10 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
           toX,
           toY,
           isSelfDraw: true,
-          delay: i * DRAW_STAGGER_MS,
+          delay: i * staggerMs,
+          duration: durationMs,
+          totalDrawn: cardsDrawn,
+          cardIndex: i,
         });
       }
     }
@@ -536,7 +575,8 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
           toY = playerRect.top + playerRect.height / 2 - 48;
         }
         const pName = playersMap[id]?.name || 'Player';
-        for (let i = 0; i < cardsDrawn; i++) {
+        const { visualCount, staggerMs, durationMs } = getDrawAnimationTiming(cardsDrawn);
+        for (let i = 0; i < visualCount; i++) {
           newAnims.push({
             id: `draw-other-${id}-${Date.now()}-${i}-${Math.random()}`,
             fromX,
@@ -545,7 +585,10 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
             toY,
             isSelfDraw: false,
             playerName: pName,
-            delay: i * DRAW_STAGGER_MS,
+            delay: i * staggerMs,
+            duration: durationMs,
+            totalDrawn: cardsDrawn,
+            cardIndex: i,
           });
         }
       }
