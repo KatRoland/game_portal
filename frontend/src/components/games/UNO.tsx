@@ -212,11 +212,10 @@ function DrawCardFlyAnimation({ anim, onDone }: { anim: DrawAnimation; onDone: (
       />
       {!anim.isSelfDraw && anim.playerName && cardIndex === 0 && (
         <div
-          className={`absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
-            totalDrawn >= 4
-              ? 'bg-gradient-to-r from-red-600 via-amber-500 to-red-600 text-white border border-yellow-300/60 shadow-lg shadow-red-900/50 animate-pulse'
-              : 'bg-black/80 border border-white/20 text-gray-300'
-          }`}
+          className={`absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap px-2.5 py-0.5 rounded-full font-bold text-[10px] ${totalDrawn >= 4
+            ? 'bg-gradient-to-r from-red-600 via-amber-500 to-red-600 text-white border border-yellow-300/60 shadow-lg shadow-red-900/50 animate-pulse'
+            : 'bg-black/80 border border-white/20 text-gray-300'
+            }`}
           style={{ animation: `unoTagFade ${duration}ms ease forwards` }}
         >
           {anim.playerName} drew {totalDrawn >= 4 ? `+${totalDrawn}!` : totalDrawn > 1 ? `+${totalDrawn}` : ''}
@@ -369,11 +368,13 @@ function OtherPlayerHandDisplay({
   cardCount,
   hasSaidUno,
   isTurn,
+  isNext,
 }: {
   playerName: string;
   cardCount: number;
   hasSaidUno?: boolean;
   isTurn?: boolean;
+  isNext?: boolean;
 }) {
   const visibleCards = Math.min(cardCount, 5);
   const extraCards = Math.max(0, cardCount - 5);
@@ -382,7 +383,9 @@ function OtherPlayerHandDisplay({
     <div
       className={`flex flex-col items-center p-4 rounded-2xl border transition-all ${isTurn
         ? 'border-yellow-400/80 bg-yellow-500/10 shadow-lg shadow-yellow-500/20 scale-105'
-        : 'border-white/10 bg-white/5'
+        : isNext
+          ? 'border-cyan-400/70 bg-cyan-500/10 shadow-md shadow-cyan-500/10 scale-[1.02]'
+          : 'border-white/10 bg-white/5'
         }`}
     >
       <div className="flex items-center gap-2 mb-3">
@@ -395,6 +398,11 @@ function OtherPlayerHandDisplay({
         {isTurn && (
           <span className="px-2 py-0.5 rounded-full bg-yellow-400 text-gray-950 text-[10px] font-extrabold uppercase">
             Turn
+          </span>
+        )}
+        {!isTurn && isNext && (
+          <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 text-[10px] font-extrabold uppercase tracking-wider">
+            Next
           </span>
         )}
       </div>
@@ -704,6 +712,16 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
   const drawPileCount: number = unoState?.drawPile?.length ?? 0;
   const isClockwise = (unoState?.state?.direction ?? 1) === 1;
 
+  const currentTurnPlayerId = unoState?.currentTurnPlayerId || '';
+  const currentTurnIdx = playerOrder.indexOf(currentTurnPlayerId);
+  const dirStep = isClockwise ? 1 : -1;
+  const nextTurnIdx =
+    playerOrder.length > 0 && currentTurnIdx !== -1
+      ? (currentTurnIdx + dirStep + playerOrder.length) % playerOrder.length
+      : -1;
+  const nextTurnPlayerId = nextTurnIdx !== -1 ? playerOrder[nextTurnIdx] : null;
+  const isNextTurn = nextTurnPlayerId === currentUserId;
+
   const otherPlayers = playerOrder
     .filter((id) => id !== currentUserId)
     .map((id) => {
@@ -714,6 +732,7 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
         cardCount: p?.cards?.length || 0,
         hasSaidUno: p?.hasSaidUno || false,
         isTurn: unoState?.currentTurnPlayerId === id,
+        isNext: nextTurnPlayerId === id,
       };
     });
 
@@ -728,26 +747,11 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
           cardCount: 0,
           hasSaidUno: false,
           isTurn: false,
+          isNext: false,
         }));
 
   const winnerId = unoState?.playersWhoOut?.[0]?.playerId;
   const winnerName = winnerId && playersMap[winnerId] ? playersMap[winnerId].name : 'Winner';
-
-  const handlePlayCard = (cardIds: string[]) => {
-    UNOFN.playCard(cardIds);
-  };
-
-  const handleDrawCard = () => {
-    UNOFN.drawCard();
-  };
-
-  const handleSayUno = () => {
-    UNOFN.sayUno();
-  };
-
-  const handleChooseColor = (color: 'red' | 'green' | 'blue' | 'yellow') => {
-    UNOFN.chooseColor(color);
-  };
 
   const isMyTurn = currentUserId === unoState?.currentTurnPlayerId;
   const currentPhase = unoState?.state?.activePhaseData?.phase;
@@ -757,8 +761,30 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
     ? (unoState?.state?.activePhaseData as { phase: 'draw_pending'; drawAmount: number; drawType: 'draw2' | 'draw4' })
     : null;
 
+  const handlePlayCard = (cardIds: string[]) => {
+    if (!isMyTurn) return;
+    UNOFN.playCard(cardIds);
+  };
+
+  const handleDrawCard = () => {
+    if (!isMyTurn) return;
+    UNOFN.drawCard();
+  };
+
+  const handleSayUno = () => {
+    if (!isMyTurn) return;
+    UNOFN.sayUno();
+  };
+
+  const handleChooseColor = (color: 'red' | 'green' | 'blue' | 'yellow') => {
+    if (!isMyTurn) return;
+    UNOFN.chooseColor(color);
+  };
+
+
+
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100">
+    <div className="min-h-screen w-full overflow-x-hidden bg-gradient-to-br from-gray-900 via-gray-900 to-black text-gray-100">
       <style dangerouslySetInnerHTML={{ __html: UNO_ANIMATION_STYLES }} />
       <AnimationOverlay
         playAnims={cardAnimations}
@@ -1068,58 +1094,95 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
               </div>
             )}
 
-            <div
-              className={`rounded-2xl border p-4 sm:p-5 transition-all flex flex-col sm:flex-row items-center justify-between gap-4 ${isDrawPending && isMyTurn
-                ? 'border-red-500/60 bg-gradient-to-r from-red-950/60 via-rose-900/40 to-red-950/60 shadow-xl shadow-red-900/20 animate-pulse'
-                : isDrawPending && !isMyTurn
-                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
-                  : isMyTurn
-                    ? 'border-yellow-400/60 bg-yellow-500/10 text-yellow-300 shadow-lg shadow-yellow-500/10'
-                    : 'border-white/10 bg-white/5 text-gray-400'
-                }`}
-            >
-              <div className="flex items-center gap-3 text-center sm:text-left">
-                <span className="text-2xl flex-shrink-0">
-                  {isDrawPending ? '⚡' : isMyTurn ? '🎯' : '⏳'}
-                </span>
-                <div>
-                  <div className="font-bold text-sm sm:text-base text-white flex items-center gap-2 justify-center sm:justify-start">
-                    {isDrawPending && isMyTurn ? (
-                      <span className="text-red-400 font-extrabold uppercase tracking-wide">
-                        Draw Stack Pending: +{drawPendingData?.drawAmount} Cards!
-                      </span>
-                    ) : isDrawPending && !isMyTurn ? (
-                      <span>
-                        {unoState?.players?.[unoState?.currentTurnPlayerId]?.name || 'Player'} must draw{' '}
-                        <span className="text-amber-400 font-bold">+{drawPendingData?.drawAmount}</span> or counter
-                      </span>
-                    ) : isMyTurn ? (
-                      <span>Your Turn — Play a card or draw!</span>
-                    ) : (
-                      <span>Waiting for {unoState?.players?.[unoState?.currentTurnPlayerId]?.name || 'other player'}...</span>
-                    )}
-                  </div>
-                  {isDrawPending && isMyTurn && (
-                    <p className="text-xs text-gray-300 mt-0.5">
+            {isDrawPending && isMyTurn && (
+              <div className="rounded-2xl border border-red-500/80 bg-gradient-to-r from-red-950/80 via-rose-900/60 to-red-950/80 p-5 shadow-2xl shadow-red-900/30 flex flex-col sm:flex-row items-center justify-between gap-4 animate-pulse">
+                <div className="flex items-center gap-4 text-center sm:text-left">
+                  <span className="text-3xl flex-shrink-0 animate-bounce">⚡</span>
+                  <div>
+                    <div className="font-extrabold text-base sm:text-lg text-red-300 uppercase tracking-wide flex items-center gap-2 justify-center sm:justify-start">
+                      Draw Stack Pending: +{drawPendingData?.drawAmount} Cards!
+                    </div>
+                    <p className="text-xs sm:text-sm text-gray-200 mt-1">
                       {drawPendingData?.drawType === 'draw2' ? (
-                        <>Play a <span className="font-bold text-yellow-300">Draw 2</span> or <span className="font-bold text-yellow-300">Draw 4</span> from your hand to stack, or take the cards.</>
+                        <>Play a <span className="font-bold text-yellow-300">Draw 2</span> or <span className="font-bold text-yellow-300">Draw 4</span> from your hand to counter, or accept the stack.</>
                       ) : (
-                        <>Play a <span className="font-bold text-yellow-300">Draw 4</span> or matching-color <span className="font-bold text-yellow-300">Draw 2</span> to stack, or take the cards.</>
+                        <>Play a <span className="font-bold text-yellow-300">Draw 4</span> or matching-color <span className="font-bold text-yellow-300">Draw 2</span> to counter, or accept the stack.</>
                       )}
                     </p>
-                  )}
+                  </div>
                 </div>
-              </div>
-
-              {isDrawPending && isMyTurn && (
                 <button
                   onClick={handleDrawCard}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs sm:text-sm uppercase tracking-wider shadow-lg shadow-red-900/50 hover:scale-105 active:scale-95 transition-all whitespace-nowrap"
+                  className="w-full sm:w-auto px-6 py-3 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-sm uppercase tracking-wider shadow-lg shadow-red-900/50 hover:scale-105 active:scale-95 transition-all whitespace-nowrap border border-red-400/40"
                 >
                   Accept & Draw +{drawPendingData?.drawAmount}
                 </button>
-              )}
-            </div>
+              </div>
+            )}
+
+            {playerOrder.length > 0 && (
+              <div className="flex flex-wrap items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-black/40 border border-white/10 backdrop-blur-md shadow-xl">
+                <div className="flex items-center gap-2 mr-2 pr-4 border-r border-white/15">
+                  <span className="text-yellow-400 font-black text-lg">
+                    {isClockwise ? '↻' : '↺'}
+                  </span>
+                  <span className="text-xs font-black uppercase tracking-wider text-gray-300">
+                    {isClockwise ? 'Clockwise' : 'Reversed'}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {playerOrder.map((id, idx) => {
+                    const p = playersMap[id];
+                    const name = id === currentUserId ? 'You' : p?.name || 'Player';
+                    const isCurrent = id === currentTurnPlayerId;
+                    const isNext = id === nextTurnPlayerId;
+
+                    return (
+                      <div key={id} className="flex items-center gap-2">
+                        <div
+                          className={`flex items-center gap-2 px-3.5 py-1.5 rounded-full border transition-all ${isCurrent
+                            ? 'border-yellow-400 bg-gradient-to-r from-yellow-500/20 to-amber-500/20 text-yellow-300 shadow-lg shadow-yellow-500/20 font-black scale-105 animate-pulse'
+                            : isNext
+                              ? 'border-cyan-400/80 bg-gradient-to-r from-cyan-500/15 to-blue-500/15 text-cyan-300 shadow-md shadow-cyan-500/10 font-extrabold'
+                              : 'border-white/10 bg-white/5 text-gray-400 font-medium'
+                            }`}
+                        >
+                          <span className="text-xs">
+                            {name}
+                          </span>
+                          {isCurrent && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-yellow-400 text-gray-950 text-[9px] font-black uppercase tracking-wider">
+                              Now
+                            </span>
+                          )}
+                          {!isCurrent && isNext && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-cyan-400/20 border border-cyan-400/40 text-cyan-300 text-[9px] font-black uppercase tracking-wider">
+                              Next
+                            </span>
+                          )}
+                        </div>
+
+                        {idx < playerOrder.length - 1 && (
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                            className="w-4 h-4 text-gray-600 flex-shrink-0"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M7.21 14.77a.75.75 0 01.02-1.06L11.16 8 7.23 4.29a.75.75 0 011.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-6 shadow-xl">
               <div className="flex items-center justify-between mb-4">
@@ -1136,6 +1199,7 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                       cardCount={player.cardCount}
                       hasSaidUno={player.hasSaidUno}
                       isTurn={player.isTurn}
+                      isNext={player.isNext}
                     />
                   </div>
                 ))}
@@ -1233,6 +1297,42 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                     </span>
                   )}
                 </div>
+
+                {isMyTurn ? (
+                  <div className="flex items-center gap-2.5 px-5 py-1.5 rounded-full bg-gradient-to-r from-yellow-500/20 via-amber-500/30 to-yellow-500/20 border border-yellow-400 text-yellow-300 shadow-lg shadow-yellow-500/20 animate-pulse">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-yellow-400"></span>
+                    </span>
+                    <span className="font-extrabold text-xs uppercase tracking-widest">
+                      Your Turn to Play
+                    </span>
+                  </div>
+                ) : isNextTurn ? (
+                  <div className="flex items-center gap-2.5 px-5 py-1.5 rounded-full bg-gradient-to-r from-cyan-500/20 via-blue-500/20 to-cyan-500/20 border border-cyan-400/80 text-cyan-300 shadow-lg shadow-cyan-500/20 animate-pulse">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400"></span>
+                    </span>
+                    <span className="font-extrabold text-xs uppercase tracking-widest">
+                      You're Next in Turn
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-gray-400 text-xs">
+                    <span className="w-2 h-2 rounded-full bg-gray-500"></span>
+                    <span>
+                      Waiting for{' '}
+                      <strong className="text-gray-200 font-bold">
+                        {unoState?.players?.[unoState?.currentTurnPlayerId]?.name || 'other player'}
+                      </strong>
+                      {isDrawPending && drawPendingData?.drawAmount ? (
+                        <span className="ml-1 text-amber-400 font-extrabold">(+{drawPendingData.drawAmount} pending)</span>
+                      ) : null}
+                    </span>
+                  </div>
+                )}
+
                 {rules.uno && (
                   userPlayerData?.hasSaidUno ? (
                     <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 shadow-lg">
@@ -1250,7 +1350,7 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-400"></span>
                       </span>
-                      ⚠️ Say UNO!
+                      Say UNO!
                     </button>
                   ) : (
                     <button
@@ -1289,7 +1389,7 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                             onClick={() => {
                               if (group.cards[0]?.id) handlePlayCard([group.cards[0].id]);
                             }}
-                            className="relative transition-all duration-300 ease-out cursor-pointer select-none group/handCard hover:-translate-y-10 hover:scale-125 hover:z-[100] focus-within:z-[100]"
+                            className="relative transition-transform duration-150 ease-out transform-gpu cursor-pointer select-none group/handCard hover:-translate-y-10 hover:scale-125 hover:z-[100] focus-within:z-[100] will-change-transform"
                             style={{
                               width: `${totalWidth}px`,
                               height: `${totalHeight}px`,
@@ -1302,7 +1402,10 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                               return (
                                 <div
                                   key={card.id || cardIdx}
-                                  className="absolute w-20 h-28 transform transition-all duration-300 filter drop-shadow-md group-hover/handCard:drop-shadow-[0_0_20px_rgba(250,204,21,0.9)] group-hover/handCard:brightness-110"
+                                  className={`absolute w-20 h-28 rounded-xl transition-[box-shadow,filter] duration-150 ${isTopCard
+                                    ? 'shadow-md group-hover/handCard:shadow-[0_0_25px_rgba(250,204,21,0.85)] group-hover/handCard:brightness-110'
+                                    : 'shadow-sm'
+                                    }`}
                                   style={{
                                     top: `${cardIdx * offsetPx}px`,
                                     left: `${cardIdx * offsetPx}px`,
@@ -1312,7 +1415,9 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                                   <img
                                     src={getUNOCardImagePath(card)}
                                     alt={`${card.color} ${card.value}`}
-                                    className="w-full h-full object-contain pointer-events-none rounded-xl"
+                                    className="w-full h-full object-contain pointer-events-none select-none rounded-xl"
+                                    loading="eager"
+                                    decoding="async"
                                   />
                                   {isTopCard && stackCount > 1 && (
                                     <span
@@ -1321,9 +1426,8 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                                         const ids = group.cards.map(c => c.id).filter((id): id is string => Boolean(id));
                                         if (ids.length > 0) handlePlayCard(ids);
                                       } : undefined}
-                                      className={`absolute -top-2.5 -right-2.5 bg-yellow-400 text-gray-950 text-xs font-black px-2 py-0.5 rounded-full shadow-lg border border-yellow-300 z-20${
-                                        rules.canPlayMultipleCards ? ' cursor-pointer hover:bg-green-400 hover:scale-110 hover:border-green-300 transition-all' : ''
-                                      }`}
+                                      className={`absolute -top-2.5 -right-2.5 bg-yellow-400 text-gray-950 text-xs font-black px-2 py-0.5 rounded-full shadow-lg border border-yellow-300 z-20${rules.canPlayMultipleCards ? ' cursor-pointer hover:bg-green-400 hover:scale-110 hover:border-green-300 transition-all' : ''
+                                        }`}
                                       title={rules.canPlayMultipleCards ? `Play all ${stackCount}` : `${stackCount} cards`}
                                     >
                                       {rules.canPlayMultipleCards ? `▶ ×${stackCount}` : `×${stackCount}`}
