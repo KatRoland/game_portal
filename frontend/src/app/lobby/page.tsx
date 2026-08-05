@@ -14,6 +14,7 @@ export default function LobbyPage() {
 	const [name, setName] = useState('')
 	const wsRef = useRef(getWSClient())
 	const [connecting, setConnecting] = useState(true)
+	const [isJoining, setIsJoining] = useState(false)
 
 	useEffect(() => {
 		const init = async () => {
@@ -54,6 +55,7 @@ export default function LobbyPage() {
 					if (prev.find(l => l.id === payload.id)) return prev
 					return [...prev, payload]
 				})
+				setIsJoining(true)
 				try {
 					wsRef.current?.send({ type: 'lobby:join', payload: { lobbyId: payload.id } })
 				} catch (e) { console.error(e) }
@@ -77,6 +79,14 @@ export default function LobbyPage() {
 			wsRef.current.on('lobby:join:success:started', (payload: { lobbyId: string }) => {
 				console.log('Lobby already started, redirecting to game', payload);
 				router.push(`/game/${payload.lobbyId}`);
+			})
+
+			wsRef.current.on('lobby:join:error', (payload: any) => {
+				setIsJoining(false)
+			})
+
+			wsRef.current.on('lobby:join:error:started', (payload: any) => {
+				setIsJoining(false)
 			})
 
 
@@ -116,10 +126,11 @@ export default function LobbyPage() {
 
 	const joinLobby = (id: string) => {
 		if (!wsRef.current) return
+		setIsJoining(true)
 		wsRef.current.send({ type: 'lobby:join', payload: { lobbyId: id } })
 	}
 
-	if (connecting || !user) {
+	if (connecting || !user || isJoining) {
 		return (
 			<div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 flex items-center justify-center">
 				<div className="text-center">
@@ -127,8 +138,12 @@ export default function LobbyPage() {
 						<div className="w-16 h-16 border-4 border-gray-800 border-t-blue-500 rounded-full animate-spin mx-auto"></div>
 						<div className="absolute inset-0 w-16 h-16 border-4 border-purple-500/20 rounded-full animate-ping"></div>
 					</div>
-					<h3 className="text-xl font-semibold text-white mb-2">Connecting to Game Portal</h3>
-					<p className="text-gray-400">Preparing your gaming experience...</p>
+					<h3 className="text-xl font-semibold text-white mb-2">
+						{isJoining ? "Joining Lobby" : "Connecting to Game Portal"}
+					</h3>
+					<p className="text-gray-400">
+						{isJoining ? "Please wait..." : "Preparing your gaming experience..."}
+					</p>
 				</div>
 			</div>
 		)
