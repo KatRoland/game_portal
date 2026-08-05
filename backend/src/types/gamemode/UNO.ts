@@ -5,6 +5,7 @@ export interface UNOPlayer {
     name: string;
     hasSaidUno: boolean;
     stillPlaying: boolean;
+    isArchived?: boolean;
 }
 
 export interface UNOCard {

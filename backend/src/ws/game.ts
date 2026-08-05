@@ -77,6 +77,22 @@ const CoreCommands = new Map<string, ICommand>();
 CoreCommands.set("game:load", {
   requireGame: true,
   execute: (ctx) => {
+    if (ctx.game && ctx.user) {
+      const restored = ctx.server.restoreArchivedPlayer(ctx.game.id, ctx.user.id);
+      if (restored) {
+        console.log(`[Game Rejoin] Restored archived player (${ctx.user.id}) to game ${ctx.game.id}`);
+        ctx.broadcastToLobby({
+          type: "game:player_restored",
+          payload: {
+            gameId: ctx.game.id,
+            playerId: ctx.user.id,
+            username: ctx.user.username,
+            game: ctx.game,
+          },
+        });
+      }
+    }
+
     const gameCopy = { ...ctx.game! };
     if (gameCopy.mode === GameMode.MUSIC_QUIZ && gameCopy.currentGameModeData) {
       gameCopy.currentGameModeData = { ...gameCopy.currentGameModeData, currentTrack: null, tracks: [] } as any;
@@ -186,6 +202,33 @@ CoreCommands.set("game:finish", {
 export class GameServer {
   private clients = new Map<string, ClientInfo>();
   private games = new Array<Game>();
+  private archivedGamePlayers = new Map<string, {
+    gameId: string;
+    player: any;
+    timestamp: number;
+  }>();
+  private disconnectTimers = new Map<string, NodeJS.Timeout>();
+
+  public restoreArchivedPlayer(gameId: string, userId: string): boolean {
+    const archiveKey = `${gameId}:${userId}`;
+    const archived = this.archivedGamePlayers.get(archiveKey);
+    if (!archived) return false;
+
+    const game = this.games.find(g => g.id === gameId);
+    if (!game) return false;
+
+    if (!game.lobby.players.some(p => String(p.id) === String(userId))) {
+      game.lobby.players.push(archived.player);
+    }
+
+    const handler = COMPONENT_HANDLERS[game.mode.toLowerCase()];
+    if (handler && typeof handler.onPlayerRestored === "function") {
+      handler.onPlayerRestored(game, userId);
+    }
+
+    this.archivedGamePlayers.delete(archiveKey);
+    return true;
+  }
 
   public getGames(): Game[] {
     return this.games;
@@ -296,6 +339,11 @@ export class GameServer {
     }
 
     this.clients.set(id, info);
+    if (info.user?.id && this.disconnectTimers.has(info.user.id)) {
+      clearTimeout(this.disconnectTimers.get(info.user.id)!);
+      this.disconnectTimers.delete(info.user.id);
+      console.log(`[Game Reconnect] Cancelled disconnect timer for user ${info.user.id}`);
+    }
 
     ws.on("message", (data) => this.handleMessage(id, data));
     ws.on("close", () => this.unregister(id));
@@ -326,6 +374,8 @@ export class GameServer {
       const game = gameId ? (this.games.find(g => g.id === gameId) ?? null) : null;
 
       if (!game || (game as any).state === "initializing") return;
+
+      this.restoreArchivedPlayer(gameId!, user.id);
 
       const gameModeCtx: GameModeContext = {
         userId: user.id,
@@ -410,6 +460,70 @@ export class GameServer {
               }
             });
           }, 10000);
+        }
+      }
+
+      if (this.disconnectTimers.has(userId)) {
+        clearTimeout(this.disconnectTimers.get(userId)!);
+        this.disconnectTimers.delete(userId);
+      }
+
+      const playerGames = this.games.filter((game) =>
+        game.lobby?.players?.some((p) => String(p.id) === String(userId))
+      );
+
+      if (playerGames.length > 0) {
+        const isStillConnected = Array.from(this.clients.values()).some((c) => String(c.user?.id) === String(userId));
+        if (!isStillConnected) {
+          console.log(`[Game Disconnect] Player (${userId}) disconnected. Starting 10s grace period before archiving...`);
+          const timer = setTimeout(() => {
+            this.disconnectTimers.delete(userId);
+            const reconnected = Array.from(this.clients.values()).some((c) => String(c.user?.id) === String(userId));
+            if (reconnected) {
+              console.log(`[Game Disconnect] Player (${userId}) reconnected within 10s grace period. Preserving game state.`);
+              return;
+            }
+
+            playerGames.forEach((game) => {
+              const currentGame = this.games.find((g) => g.id === game.id);
+              if (!currentGame) return;
+
+              const playerIndex = currentGame.lobby.players.findIndex((p) => String(p.id) === String(userId));
+              if (playerIndex !== -1) {
+                const player = currentGame.lobby.players[playerIndex];
+                console.log(`[Game Disconnect] Archiving player (${userId}) from game: ${currentGame.id}`);
+
+                const archiveKey = `${currentGame.id}:${userId}`;
+                this.archivedGamePlayers.set(archiveKey, {
+                  gameId: currentGame.id,
+                  player: { ...player },
+                  timestamp: Date.now(),
+                });
+
+                currentGame.lobby.players.splice(playerIndex, 1);
+
+                const handler = COMPONENT_HANDLERS[currentGame.mode.toLowerCase()];
+                if (handler && typeof handler.onPlayerArchived === "function") {
+                  handler.onPlayerArchived(currentGame, userId);
+                }
+
+                this.broadcastToLobby(currentGame.id, {
+                  type: "game:player_archived",
+                  payload: {
+                    gameId: currentGame.id,
+                    playerId: userId,
+                    username: player.username,
+                  },
+                });
+                this.broadcastToLobby(currentGame.id, {
+                  type: "game:load:response",
+                  payload: { game: currentGame },
+                });
+              }
+            });
+          }, 10000);
+
+          this.disconnectTimers.set(userId, timer);
         }
       }
     }

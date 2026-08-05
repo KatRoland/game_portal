@@ -369,38 +369,47 @@ function OtherPlayerHandDisplay({
   hasSaidUno,
   isTurn,
   isNext,
+  isArchived,
 }: {
   playerName: string;
   cardCount: number;
   hasSaidUno?: boolean;
   isTurn?: boolean;
   isNext?: boolean;
+  isArchived?: boolean;
 }) {
   const visibleCards = Math.min(cardCount, 5);
   const extraCards = Math.max(0, cardCount - 5);
 
   return (
     <div
-      className={`flex flex-col items-center p-4 rounded-2xl border transition-all ${isTurn
-        ? 'border-yellow-400/80 bg-yellow-500/10 shadow-lg shadow-yellow-500/20 scale-105'
-        : isNext
-          ? 'border-cyan-400/70 bg-cyan-500/10 shadow-md shadow-cyan-500/10 scale-[1.02]'
-          : 'border-white/10 bg-white/5'
+      className={`flex flex-col items-center p-4 rounded-2xl border transition-all ${isArchived
+        ? 'border-gray-600/50 bg-gray-800/30 opacity-50 grayscale'
+        : isTurn
+          ? 'border-yellow-400/80 bg-yellow-500/10 shadow-lg shadow-yellow-500/20 scale-105'
+          : isNext
+            ? 'border-cyan-400/70 bg-cyan-500/10 shadow-md shadow-cyan-500/10 scale-[1.02]'
+            : 'border-white/10 bg-white/5'
         }`}
     >
       <div className="flex items-center gap-2 mb-3">
         <span className="font-bold text-white text-sm">{playerName}</span>
-        {hasSaidUno && (
+        {isArchived && (
+          <span className="px-2 py-0.5 rounded-full bg-gray-600 border border-gray-400/40 text-gray-300 text-[10px] font-black uppercase tracking-wider">
+            Offline
+          </span>
+        )}
+        {!isArchived && hasSaidUno && (
           <span className="px-2 py-0.5 rounded-full bg-red-600 text-[10px] font-black text-white uppercase tracking-wider shadow animate-pulse">
             UNO!
           </span>
         )}
-        {isTurn && (
+        {!isArchived && isTurn && (
           <span className="px-2 py-0.5 rounded-full bg-yellow-400 text-gray-950 text-[10px] font-extrabold uppercase">
             Turn
           </span>
         )}
-        {!isTurn && isNext && (
+        {!isArchived && !isTurn && isNext && (
           <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 text-[10px] font-extrabold uppercase tracking-wider">
             Next
           </span>
@@ -733,6 +742,7 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
         hasSaidUno: p?.hasSaidUno || false,
         isTurn: unoState?.currentTurnPlayerId === id,
         isNext: nextTurnPlayerId === id,
+        isArchived: p?.isArchived || false,
       };
     });
 
@@ -748,6 +758,7 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
           hasSaidUno: false,
           isTurn: false,
           isNext: false,
+          isArchived: false,
         }));
 
   const winnerId = unoState?.playersWhoOut?.[0]?.playerId;
@@ -762,7 +773,7 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
     : null;
 
   const handlePlayCard = (cardIds: string[]) => {
-    if (!isMyTurn) return;
+    if (!isMyTurn && unoState?.gameRules?.jumpin == false) return;
     UNOFN.playCard(cardIds);
   };
 
@@ -1200,6 +1211,7 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
                       hasSaidUno={player.hasSaidUno}
                       isTurn={player.isTurn}
                       isNext={player.isNext}
+                      isArchived={player.isArchived}
                     />
                   </div>
                 ))}

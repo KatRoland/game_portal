@@ -122,4 +122,18 @@ export class SOPHandler implements IGameModeHandler {
       ctx.send({ type: "sop:error", message: "internal_server_error_in_module" });
     }
   }
+
+  onPlayerArchived(game: any, playerId: string): void {
+    const sopData = game.currentGameModeData;
+    if (!sopData || !sopData.Scoreboard) return;
+    const scoreEntry = sopData.Scoreboard.scores?.find((s: any) => s.playerId === playerId);
+    if (scoreEntry) scoreEntry.isArchived = true;
+  }
+
+  onPlayerRestored(game: any, playerId: string): void {
+    const sopData = game.currentGameModeData;
+    if (!sopData || !sopData.Scoreboard) return;
+    const scoreEntry = sopData.Scoreboard.scores?.find((s: any) => s.playerId === playerId);
+    if (scoreEntry) scoreEntry.isArchived = false;
+  }
 }

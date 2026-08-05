@@ -14,4 +14,6 @@ export interface GameModeContext {
 
 export interface IGameModeHandler {
     handleMessage(ctx: GameModeContext): Promise<void> | void;
+    onPlayerArchived?(game: Game, playerId: string): void;
+    onPlayerRestored?(game: Game, playerId: string): void;
 }

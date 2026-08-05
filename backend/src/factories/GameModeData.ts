@@ -177,6 +177,7 @@ export async function createGameModeData(
                 topCard: null,
                 drawPile: [],
                 backLog: [],
+                drawStack: 0,
                 players: unoPlayers,
                 playersWhoOut: [],
                 Scoreboard: scoreboard,

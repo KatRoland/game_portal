@@ -24,7 +24,8 @@ function getNextPlayerIndex(
 
     while (steps > 0) {
         idx = (idx + direction + len) % len;
-        if (players[playerOrderIds[idx]]?.stillPlaying) {
+        const p = players[playerOrderIds[idx]];
+        if (p?.stillPlaying && !p?.isArchived) {
             steps--;
         }
     }
@@ -437,6 +438,7 @@ export class UnoHandler implements IGameModeHandler {
                                 if (unoData.drawStack > 16384) unoData.drawStack = 16384;
 
                                 for (let i = 0; i < count; i++) unoData.drawStack *= baseAmount;
+                                if (unoData.drawStack > 16384) unoData.drawStack = 16384;
                             } else {
                                 unoData.drawStack += count * baseAmount;
                                 if (unoData.drawStack > 16384) unoData.drawStack = 16384;
@@ -460,6 +462,8 @@ export class UnoHandler implements IGameModeHandler {
                             if (unoData.drawStack > 16384) unoData.drawStack = 16384;
 
                             for (let i = 0; i < count; i++) unoData.drawStack *= baseAmount;
+                            if (unoData.drawStack > 16384) unoData.drawStack = 16384;
+
                         } else {
                             unoData.drawStack += count * baseAmount;
                             if (unoData.drawStack > 16384) unoData.drawStack = 16384;
@@ -776,5 +780,35 @@ export class UnoHandler implements IGameModeHandler {
             console.error(`[uno Class Handler Fatal Error] Crash prevented in case ${ctx.dataType}:`, error);
             ctx.send({ type: "uno:error", payload: { notificationLevel: "modal", message: "internal_server_error_in_module" } });
         }
+    }
+
+    onPlayerArchived(game: any, playerId: string): void {
+        const unoData = game.currentGameModeData as UNO;
+        if (!unoData || !unoData.players || !unoData.players[playerId]) return;
+
+        unoData.players[playerId].isArchived = true;
+        const scoreEntry = unoData.Scoreboard?.scores?.find(s => s.playerId === playerId);
+        if (scoreEntry) scoreEntry.isArchived = true;
+
+        if (String(unoData.currentTurnPlayerId) === String(playerId)) {
+            console.log(`[UNO] Current turn player (${playerId}) was archived! Advancing turn...`);
+            const nextTurnId = getNextPlayerIndex(
+                playerId,
+                unoData.playerOrderIds,
+                unoData.state.direction,
+                unoData.players
+            );
+            unoData.currentTurnPlayerId = nextTurnId;
+        }
+    }
+
+    onPlayerRestored(game: any, playerId: string): void {
+        const unoData = game.currentGameModeData as UNO;
+        if (!unoData || !unoData.players || !unoData.players[playerId]) return;
+
+        unoData.players[playerId].isArchived = false;
+        const scoreEntry = unoData.Scoreboard?.scores?.find(s => s.playerId === playerId);
+        if (scoreEntry) scoreEntry.isArchived = false;
+        console.log(`[UNO] Player ${playerId} restored to active status.`);
     }
 }

@@ -252,6 +252,7 @@ export interface UNOPlayer {
   name: string;
   hasSaidUno: boolean;
   stillPlaying: boolean;
+  isArchived?: boolean;
 }
 
 export type UNOPhase = "draw" | "play" | "choose_color" | "draw_pending";

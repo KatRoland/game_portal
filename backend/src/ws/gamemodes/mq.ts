@@ -165,4 +165,18 @@ export class MusicQuizHandler implements IGameModeHandler {
             ctx.send({ type: "mq:error", message: "internal_server_error_in_module" });
         }
     }
+
+    onPlayerArchived(game: any, playerId: string): void {
+        const mqData = game.currentGameModeData;
+        if (!mqData || !mqData.Scoreboard) return;
+        const scoreEntry = mqData.Scoreboard.scores?.find((s: any) => s.playerId === playerId);
+        if (scoreEntry) scoreEntry.isArchived = true;
+    }
+
+    onPlayerRestored(game: any, playerId: string): void {
+        const mqData = game.currentGameModeData;
+        if (!mqData || !mqData.Scoreboard) return;
+        const scoreEntry = mqData.Scoreboard.scores?.find((s: any) => s.playerId === playerId);
+        if (scoreEntry) scoreEntry.isArchived = false;
+    }
 }

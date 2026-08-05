@@ -174,4 +174,18 @@ export class KaraokeSoloHandler implements IGameModeHandler {
             ctx.send({ type: "ks:error", message: "internal_server_error_in_module" });
         }
     }
+
+    onPlayerArchived(game: any, playerId: string): void {
+        const ksData = game.currentGameModeData;
+        if (!ksData || !ksData.Scoreboard) return;
+        const scoreEntry = ksData.Scoreboard.scores?.find((s: any) => s.playerId === playerId);
+        if (scoreEntry) scoreEntry.isArchived = true;
+    }
+
+    onPlayerRestored(game: any, playerId: string): void {
+        const ksData = game.currentGameModeData;
+        if (!ksData || !ksData.Scoreboard) return;
+        const scoreEntry = ksData.Scoreboard.scores?.find((s: any) => s.playerId === playerId);
+        if (scoreEntry) scoreEntry.isArchived = false;
+    }
 }

@@ -250,6 +250,42 @@ export default function GamePage() {
           });
         });
 
+        wsRef.current.on('game:player_archived', (payload: any) => {
+          console.log("[Game] Player archived:", payload.username || payload.playerId);
+          setGameData((prev: any) => {
+            if (!prev) return prev;
+            const updated = { ...prev };
+            if (updated.currentGameModeData?.players && updated.currentGameModeData.players[payload.playerId]) {
+              updated.currentGameModeData.players[payload.playerId].isArchived = true;
+            }
+            if (updated.currentGameModeData?.Scoreboard?.scores) {
+              const score = updated.currentGameModeData.Scoreboard.scores.find((s: any) => s.playerId === payload.playerId);
+              if (score) score.isArchived = true;
+            }
+            return updated;
+          });
+        });
+
+        wsRef.current.on('game:player_restored', (payload: any) => {
+          console.log("[Game] Player restored:", payload.username || payload.playerId);
+          if (payload.game) {
+            setGameData(payload.game);
+          } else {
+            setGameData((prev: any) => {
+              if (!prev) return prev;
+              const updated = { ...prev };
+              if (updated.currentGameModeData?.players && updated.currentGameModeData.players[payload.playerId]) {
+                updated.currentGameModeData.players[payload.playerId].isArchived = false;
+              }
+              if (updated.currentGameModeData?.Scoreboard?.scores) {
+                const score = updated.currentGameModeData.Scoreboard.scores.find((s: any) => s.playerId === payload.playerId);
+                if (score) score.isArchived = false;
+              }
+              return updated;
+            });
+          }
+        });
+
         wsRef.current.on('game:game_mode_ended', (payload: { game: Game }) => {
           setGameData(payload.game);
         });

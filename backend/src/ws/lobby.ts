@@ -10,6 +10,12 @@ import { ClientInfo } from "../types/ClientInfo";
 class LobbyServer {
   private clients = new Map<string, ClientInfo>();
   private Lobbies = new Array<Lobby>();
+  private archivedLobbyPlayers = new Map<string, {
+    lobbyId: string;
+    player: any;
+    timestamp: number;
+  }>();
+  private disconnectTimers = new Map<string, NodeJS.Timeout>();
 
   async register(ws: WebSocket, req: http.IncomingMessage) {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -54,6 +60,11 @@ class LobbyServer {
     }
 
     this.clients.set(id, info);
+    if (info.user?.id && this.disconnectTimers.has(info.user.id)) {
+      clearTimeout(this.disconnectTimers.get(info.user.id)!);
+      this.disconnectTimers.delete(info.user.id);
+      console.log(`[Lobby Reconnect] Cancelled disconnect timer for user ${info.user.id}`);
+    }
 
     ws.on("message", (data) => this.handleMessage(id, data));
     ws.on("close", () => this.unregister(id));
@@ -146,6 +157,23 @@ class LobbyServer {
             this.send(clientInfo.ws, { type: "lobby:join:success", payload: lobby });
             break;
           }
+
+          const archiveKey = `${lobbyId}:${clientInfo.user.id}`;
+          if (this.archivedLobbyPlayers.has(archiveKey)) {
+            const archived = this.archivedLobbyPlayers.get(archiveKey)!;
+            console.log(`[Lobby Rejoin] Restoring archived player ${clientInfo.user.id} to lobby ${lobbyId}`);
+            lobby.players.push(archived.player);
+            this.archivedLobbyPlayers.delete(archiveKey);
+            if (lobby.state === 'started') {
+              this.send(clientInfo.ws, { type: "lobby:join:success:started", payload: { lobbyId: lobbyId } });
+              return;
+            }
+            this.broadcast({ type: "lobby:player_joined", payload: { lobbyId: lobby.id, player: archived.player } });
+            this.send(clientInfo.ws, { type: "lobby:join:success", payload: lobby });
+            this.broadcast({ type: "lobby:update_lobbies", payload: { lobbies: this.Lobbies } });
+            break;
+          }
+
           if (lobby.state === 'started') {
             this.send(clientInfo.ws, { type: "lobby:join:error:started", payload: lobbyId });
             return;
@@ -184,9 +212,11 @@ class LobbyServer {
         console.log(`lobby:list ${id}`);
         const clientInfo = this.clients.get(id);
         if (clientInfo) {
-          if (this.Lobbies.find(l => l.players.find(p => p.id === clientInfo.user?.id))) {
-            const userLobby = this.Lobbies.find(l => l.players.find(p => p.id === clientInfo.user?.id));
-            this.send(clientInfo.ws, { type: "lobby:list:already_joined", payload: { lobbyId: userLobby?.id } });
+          const archivedEntry = Array.from(this.archivedLobbyPlayers.values()).find(a => String(a.player?.id) === String(clientInfo.user?.id));
+          const activeLobby = this.Lobbies.find(l => l.players.some(p => String(p.id) === String(clientInfo.user?.id)));
+          const userLobby = activeLobby || (archivedEntry ? this.Lobbies.find(l => l.id === archivedEntry.lobbyId) : null);
+          if (userLobby) {
+            this.send(clientInfo.ws, { type: "lobby:list:already_joined", payload: { lobbyId: userLobby.id } });
             break;
           }
           this.send(clientInfo.ws, { type: "lobby:list:response", payload: { lobbies: this.Lobbies } });
@@ -253,6 +283,55 @@ class LobbyServer {
     const info = this.clients.get(id);
     if (!info) return;
     this.clients.delete(id);
+
+    const userId = info.user?.id;
+    if (userId) {
+      if (this.disconnectTimers.has(userId)) {
+        clearTimeout(this.disconnectTimers.get(userId)!);
+        this.disconnectTimers.delete(userId);
+      }
+
+      const userLobbies = this.Lobbies.filter(l => l.players.some(p => String(p.id) === String(userId)));
+      if (userLobbies.length > 0) {
+        const isStillConnected = Array.from(this.clients.values()).some(c => String(c.user?.id) === String(userId));
+        if (!isStillConnected) {
+          console.log(`[Lobby Disconnect] Player (${userId}) disconnected. Starting 10s grace period before archiving...`);
+          const timer = setTimeout(() => {
+            this.disconnectTimers.delete(userId);
+            const reconnected = Array.from(this.clients.values()).some(c => String(c.user?.id) === String(userId));
+            if (reconnected) {
+              console.log(`[Lobby Disconnect] Player (${userId}) reconnected within 10s grace period. Preserving lobby membership.`);
+              return;
+            }
+
+            userLobbies.forEach(lobby => {
+              const currentLobby = this.Lobbies.find(l => l.id === lobby.id);
+              if (!currentLobby) return;
+
+              const playerIndex = currentLobby.players.findIndex(p => String(p.id) === String(userId));
+              if (playerIndex !== -1) {
+                const player = currentLobby.players[playerIndex];
+                console.log(`[Lobby Disconnect] Archiving player (${userId}) from lobby: ${currentLobby.id}`);
+
+                this.archivedLobbyPlayers.set(`${currentLobby.id}:${userId}`, {
+                  lobbyId: currentLobby.id,
+                  player: { ...player },
+                  timestamp: Date.now(),
+                });
+
+                currentLobby.players.splice(playerIndex, 1);
+
+                this.broadcast({ type: "lobby:player_left", payload: { lobbyId: currentLobby.id, playerId: userId } });
+                this.broadcast({ type: "lobby:update_lobbies", payload: { lobbies: this.Lobbies } });
+              }
+            });
+          }, 10000);
+
+          this.disconnectTimers.set(userId, timer);
+        }
+      }
+    }
+
     this.broadcast({ type: "user_left", payload: { id, name: info.name ?? null } });
     this.broadcast({ type: "user_list", payload: this.getUserList() });
   }
