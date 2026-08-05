@@ -724,10 +724,21 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
   const currentTurnPlayerId = unoState?.currentTurnPlayerId || '';
   const currentTurnIdx = playerOrder.indexOf(currentTurnPlayerId);
   const dirStep = isClockwise ? 1 : -1;
-  const nextTurnIdx =
-    playerOrder.length > 0 && currentTurnIdx !== -1
-      ? (currentTurnIdx + dirStep + playerOrder.length) % playerOrder.length
-      : -1;
+  let nextTurnIdx = -1;
+  if (playerOrder.length > 0 && currentTurnIdx !== -1) {
+    let candidateIdx = (currentTurnIdx + dirStep + playerOrder.length) % playerOrder.length;
+    for (let i = 0; i < playerOrder.length; i++) {
+      const candidateId = playerOrder[candidateIdx];
+      const p = playersMap[candidateId];
+      const isArchived = p?.isArchived || false;
+      const isOut = p?.stillPlaying === false;
+      if (!isArchived && !isOut) {
+        nextTurnIdx = candidateIdx;
+        break;
+      }
+      candidateIdx = (candidateIdx + dirStep + playerOrder.length) % playerOrder.length;
+    }
+  }
   const nextTurnPlayerId = nextTurnIdx !== -1 ? playerOrder[nextTurnIdx] : null;
   const isNextTurn = nextTurnPlayerId === currentUserId;
 
