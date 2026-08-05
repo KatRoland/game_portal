@@ -16,6 +16,7 @@ export default function LobbyRoomPage() {
   const [lobby, setLobby] = useState<Lobby | null>(null)
   const [gameModeOrder, setGameModeOrder] = useState<Array<NextGameMode>>([])
   const [connecting, setConnecting] = useState(true)
+  const [isLeaving, setIsLeaving] = useState(false)
   const [selectedGameMode, setSelectedGameMode] = useState<GameMode | null>(null)
   const [playlists, setPlaylists] = useState<Array<{ id: string, name: string }>>([])
   const wsRef = useRef<WSClient | null>(getWSClient())
@@ -66,7 +67,16 @@ export default function LobbyRoomPage() {
       })
 
       wsRef.current.on('lobby:player_left', (payload: { lobbyId: string; playerId: string }) => {
+        console.log("[WS] lobby:player_left", payload)
         if (payload.lobbyId !== id) return
+        if (payload.playerId == user?.id) {
+          console.log('You left the lobby')
+          setIsLeaving(true)
+          setTimeout(() => {
+            try { router.push(`/lobby`) } catch (e) { console.error(e) }
+          }, 1000)
+          return;
+        }
         setLobby((prev) => {
           if (!prev) return prev
           return { ...prev, players: (prev.players || []).filter(p => p.id !== payload.playerId) }
@@ -78,6 +88,12 @@ export default function LobbyRoomPage() {
         setLobby(payload)
       })
 
+      wsRef.current.on('lobby:leave:success', (payload: { lobbyId: string }) => {
+        setIsLeaving(true)
+        setTimeout(() => {
+          try { router.push(`/lobby`) } catch (e) { console.error(e) }
+        }, 1000)
+      })
 
       wsRef.current.on('lobby:dissolved', (payload: { lobbyId: string }) => {
         if (payload.lobbyId !== id) return
@@ -104,8 +120,6 @@ export default function LobbyRoomPage() {
         console.log('Lobby started', payload)
         try { router.push(`/game/${payload.game.id}`) } catch (e) { console.error(e) }
       })
-
-      setConnecting(false)
     }
 
     init()
@@ -118,10 +132,7 @@ export default function LobbyRoomPage() {
   const leaveLobby = () => {
     try {
       wsRef.current?.send({ type: 'lobby:leave', payload: { lobbyId: id } })
-
-      router.push('/lobby')
     } catch (e) { console.error(e) }
-    wsRef.current?.disconnect()
   }
 
   const getGameModeList = () => {
@@ -323,7 +334,7 @@ export default function LobbyRoomPage() {
     )
   }
 
-  if (connecting || !user) {
+  if (connecting || !user || isLeaving) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center">
         <div className="text-center">
@@ -331,8 +342,12 @@ export default function LobbyRoomPage() {
             <div className="animate-spin rounded-full h-16 w-16 border-4 border-gray-700 border-t-blue-500 mx-auto mb-4"></div>
             <div className="absolute inset-0 rounded-full h-16 w-16 border-4 border-blue-500 opacity-30 animate-ping"></div>
           </div>
-          <h2 className="text-2xl font-bold text-white mb-2">Connecting to Lobby</h2>
-          <p className="text-gray-400">Preparing your gaming experience...</p>
+          <h2 className="text-2xl font-bold text-white mb-2">
+            {isLeaving ? "Leaving Lobby" : "Connecting to Lobby"}
+          </h2>
+          <p className="text-gray-400">
+            {isLeaving ? "Please wait..." : "Preparing your gaming experience..."}
+          </p>
         </div>
       </div>
     )

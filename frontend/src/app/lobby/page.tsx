@@ -63,6 +63,7 @@ export default function LobbyPage() {
 				if (payload && Array.isArray(payload.lobbies)) {
 					setLobbies(payload.lobbies)
 				}
+				setConnecting(false)
 			})
 
 			wsRef.current.on('lobby:list:already_joined', (payload: { lobbyId: string }) => {
@@ -87,11 +88,16 @@ export default function LobbyPage() {
 				}
 			})
 
+			wsRef.current.on('lobby:leave:success', (payload: { lobbyId: string }) => {
+				console.log("[WS] lobby:leave:success", payload)
+				setLobbies(prev => prev.filter(l => l.id !== payload.lobbyId))
+				wsRef.current?.disconnect()
+				try { router.push(`/lobby`) } catch (e) { console.error(e) }
+			})
+
 			wsRef.current.on('lobby:dissolved', (payload: { lobbyId: string }) => {
 				setLobbies(prev => prev.filter(l => l.id !== payload.lobbyId))
 			})
-
-			setConnecting(false)
 		}
 
 		init()

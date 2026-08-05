@@ -200,8 +200,8 @@ class LobbyServer {
             this.broadcast({ type: "lobby:update_lobbies", payload: { lobbies: this.Lobbies } });
             break;
           }
-
           lobby.players = lobby.players.filter(p => p.id !== clientInfo.user!.id);
+          this.send(clientInfo.ws, { type: "lobby:leave:success", payload: { lobbyId: lobby.id } });
           this.broadcast({ type: "lobby:player_left", payload: { lobbyId: lobby.id, playerId: clientInfo.user.id } });
           this.broadcast({ type: "lobby:update_lobbies", payload: { lobbies: this.Lobbies } });
         }

@@ -16,6 +16,7 @@ export class WSClient {
 
   private messageQueue: WSMessage[] = [];
   private needTokenRefresh = false;
+  private intentionalDisconnect = false;
 
   constructor(private tokenProvider: (forceRefresh?: boolean) => Promise<string | null>, private page: string) { }
 
@@ -23,6 +24,7 @@ export class WSClient {
     if (this.ws?.readyState === WebSocket.OPEN) return;
 
     this.setStatus('connecting');
+    this.intentionalDisconnect = false;
 
     const token = await this.tokenProvider(this.needTokenRefresh);
     this.needTokenRefresh = false;
@@ -70,6 +72,10 @@ export class WSClient {
 
     this.ws.onclose = (event) => {
       console.log('WebSocket disconnected', event.code, event.reason);
+      if (this.intentionalDisconnect) {
+          console.log('Intentional disconnect, not reconnecting.');
+          return;
+      }
       if (event.code === 4001 || event.code === 1008 || (event.reason && (event.reason.includes('token') || event.reason.includes('expired')))) {
         console.log('WS auth failure detected, will refresh token on reconnect');
         this.needTokenRefresh = true;
@@ -192,6 +198,7 @@ export class WSClient {
   }
 
   disconnect() {
+    this.intentionalDisconnect = true;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
