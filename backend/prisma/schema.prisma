@@ -9,17 +9,17 @@ datasource db {
 }
 
 model User {
-  id              Int       @id @default(autoincrement())
-  discordId       String    @unique
+  id              Int           @id @default(autoincrement())
+  discordId       String        @unique
   username        String
-  isAdmin         Boolean   @default(false)
+  isAdmin         Boolean       @default(false)
   discriminator   String?
   avatar          String?
   email           String?
-  customAvatar    Boolean   @default(false)
+  customAvatar    Boolean       @default(false)
   customAvatarUrl String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
   sessions        Session[]
   chatMessages    ChatMessage[]
 }
@@ -137,4 +137,17 @@ model ChatMessage {
 
   @@index([createdAt])
   @@index([channel, createdAt])
+}
+
+model HitsterSong {
+  id         String   @id @default(uuid())
+  title      String
+  artist     String
+  year       Int
+  previewUrl String   @db.Text
+  spotifyUri String   @unique
+  albumCover String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  @@index([year])
 }
