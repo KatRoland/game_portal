@@ -7,6 +7,7 @@ export enum GameMode {
   SMASH_OR_PASS = "SMASH_OR_PASS",
   SMASH_OR_PASS_PLAYLIST = "SMASH_OR_PASS_PLAYLIST",
   UNO = "UNO",
+  Hitster = "Hitster",
   Cross = "Cross",
   Ended = "Ended"
 }
@@ -324,4 +325,12 @@ export interface SiteChatMessage {
   createdAt: string;
   channel?: string;
   user: ChatUser;
+}
+
+export interface Hitster {
+
+}
+
+export interface HTFN {
+
 }
