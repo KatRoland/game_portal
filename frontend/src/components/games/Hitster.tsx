@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useUser } from '@/contexts/UserContext';
 import { Game, GameFN, HTFN, Hitster, HitsterTeam } from '@/types';
-import { Users, Crown, Play, Pause, Settings } from 'lucide-react';
+import { Users, Crown, Play, Pause, Settings, Volume2 } from 'lucide-react';
 
 interface HitsterProps {
   isHost: boolean;
@@ -16,6 +16,7 @@ export default function HitsterGame({ isHost, GameData, GameFN, HTFN }: HitsterP
   const { user } = useUser();
   const hitsterData = GameData.currentGameModeData as Hitster;
   const audioRef = useRef<HTMLAudioElement>(null);
+  const [volume, setVolume] = useState(0.5);
 
   useEffect(() => {
     if (hitsterData?.state === 'PLAYING' && hitsterData.currentSong) {
@@ -23,11 +24,17 @@ export default function HitsterGame({ isHost, GameData, GameFN, HTFN }: HitsterP
         const base = process.env.NEXT_PUBLIC_API_BASE_URL;
         const fileName = hitsterData.currentSong.previewUrl.split('/').pop();
         audioRef.current.src = `${base}/previews/${fileName}`;
-        audioRef.current.volume = 0.5;
+        audioRef.current.volume = volume;
         audioRef.current.play().catch(e => console.error("Audio play failed:", e));
       }
     }
   }, [hitsterData?.currentSong?.id, hitsterData?.state]);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume;
+    }
+  }, [volume]);
 
   if (!hitsterData) return <div className="min-h-screen bg-gray-900 flex items-center justify-center text-white">Loading Hitster...</div>;
 
@@ -53,6 +60,18 @@ export default function HitsterGame({ isHost, GameData, GameFN, HTFN }: HitsterP
             <button onClick={() => audioRef.current?.pause()} className="bg-white/10 p-3 rounded-full hover:bg-white/20 transition">
               <Pause size={20} fill="currentColor" />
             </button>
+            <div className="flex items-center gap-2 ml-4">
+              <Volume2 size={20} className="text-gray-300" />
+              <input 
+                type="range" 
+                min="0" 
+                max="1" 
+                step="0.01" 
+                value={volume} 
+                onChange={(e) => setVolume(parseFloat(e.target.value))}
+                className="w-24 accent-pink-500"
+              />
+            </div>
           </div>
         )}
 
@@ -359,6 +378,7 @@ function ActiveTurnView({ hitsterData, isHost, user, HTFN }: any) {
               isActiveTeam={teamId === hitsterData.currentTurnTeamId}
               isMyTeam={teamId === myTeamId}
               HTFN={HTFN}
+              user={user}
             />
           ))}
         </div>
@@ -367,11 +387,17 @@ function ActiveTurnView({ hitsterData, isHost, user, HTFN }: any) {
   );
 }
 
-function TimelineView({ team, hitsterData, isActiveTeam, isMyTeam, HTFN }: any) {
+function TimelineView({ team, hitsterData, isActiveTeam, isMyTeam, HTFN, user }: any) {
+  const [confirmLockIndex, setConfirmLockIndex] = useState<number | null>(null);
   const phase = hitsterData.turnState?.phase;
-  const isPositionGuessing = phase === 'POSITION_GUESS' && isActiveTeam && isMyTeam;
+  const isLeader = team.leaderId === String(user?.id);
+  const isPositionGuessingPhase = phase === 'POSITION_GUESS' && isActiveTeam && isMyTeam;
   const isBlocked = hitsterData.turnState?.nameCallQueue.length > 0;
   const proposedIndex = hitsterData.turnState?.activeTeamProposedIndex;
+
+  const canInteract = isPositionGuessingPhase && !isBlocked;
+  const canLock = canInteract && isLeader;
+  const canSuggest = canInteract && !isLeader;
 
   const insertPoints = Array.from({ length: team.timeline.length + 1 }, (_, i) => i);
 
@@ -388,27 +414,68 @@ function TimelineView({ team, hitsterData, isActiveTeam, isMyTeam, HTFN }: any) 
       </div>
 
       <div className="relative flex-1 bg-black/40 rounded-xl p-3 flex items-center">
-        {isPositionGuessing && isBlocked && (
+        {isPositionGuessingPhase && isBlocked && (
           <div className="absolute inset-0 z-10 bg-black/60 backdrop-blur-sm rounded-xl flex items-center justify-center">
             <span className="text-sm font-bold text-white bg-red-600/90 px-4 py-1.5 rounded-full shadow-[0_0_15px_rgba(220,38,38,0.5)]">Blocked by Caller</span>
           </div>
         )}
 
         <div className="flex gap-2 overflow-x-auto items-center w-full min-h-[140px] custom-scrollbar pb-2">
-          {insertPoints.map((index) => (
+          {insertPoints.map((index) => {
+            const suggestions = team.proposedGuesses?.filter((g: any) => g.index === index) || [];
+            
+            return (
             <React.Fragment key={`insert-${index}`}>
-              {isPositionGuessing && (
-                <div className="shrink-0 flex items-center justify-center w-8 h-32">
-                  <button
-                    onClick={() => HTFN.lockPosition(index)}
-                    className="w-full h-full border-2 border-dashed border-pink-500/40 hover:bg-pink-500/20 hover:border-pink-400 rounded-lg text-pink-400 hover:text-white transition flex flex-col items-center justify-center group"
-                  >
-                    <span className="opacity-0 group-hover:opacity-100 transition text-[10px] font-bold uppercase rotate-90 whitespace-nowrap">Lock</span>
-                  </button>
+              {isPositionGuessingPhase && (
+                <div className="shrink-0 flex flex-col items-center justify-center w-24 h-32 relative">
+                  {suggestions.length > 0 && (
+                    <div className="absolute inset-0 flex flex-col justify-center items-center gap-1 z-10 pointer-events-none p-1">
+                      {suggestions.map((s: any) => {
+                        const pName = hitsterData.players[s.playerId]?.name || "Unknown";
+                        return (
+                          <div key={s.playerId} className="bg-blue-600/90 backdrop-blur-sm text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow whitespace-nowrap max-w-full overflow-hidden text-ellipsis border border-blue-400/50">
+                            {pName}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {canLock && (
+                    <button
+                      onClick={() => {
+                        if (confirmLockIndex === index) {
+                          HTFN.lockPosition(index);
+                          setConfirmLockIndex(null);
+                        } else {
+                          setConfirmLockIndex(index);
+                        }
+                      }}
+                      onMouseLeave={() => {
+                        if (confirmLockIndex === index) {
+                          setConfirmLockIndex(null);
+                        }
+                      }}
+                      className={`w-full h-full border-2 border-dashed rounded-lg transition flex flex-col items-center justify-center group relative z-20 ${confirmLockIndex === index ? 'border-yellow-400 bg-yellow-500/20 text-yellow-400' : suggestions.length > 0 ? 'border-blue-400 bg-blue-500/10 hover:border-pink-400 text-pink-400' : 'border-pink-500/40 hover:border-pink-400 text-pink-400'} hover:text-white`}
+                    >
+                      <div className={`absolute inset-0 transition pointer-events-none rounded-lg ${confirmLockIndex === index ? 'bg-black/80' : 'bg-black/0 group-hover:bg-black/70'}`} />
+                      <span className={`transition text-sm font-bold uppercase tracking-wider relative z-30 drop-shadow-md text-center ${confirmLockIndex === index ? 'opacity-100 text-yellow-400' : 'opacity-0 group-hover:opacity-100'}`}>
+                        {confirmLockIndex === index ? 'Confirm' : 'Lock'}
+                      </span>
+                    </button>
+                  )}
+                  {canSuggest && (
+                    <button
+                      onClick={() => HTFN.proposeGuess(index)}
+                      className={`w-full h-full border-2 border-dashed rounded-lg transition flex flex-col items-center justify-center group relative z-20 ${suggestions.find((s:any)=>s.playerId === String(user?.id)) ? 'border-blue-500 bg-blue-500/20' : 'border-blue-500/40 hover:border-blue-400'} text-blue-400 hover:text-white`}
+                    >
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/70 transition pointer-events-none rounded-lg" />
+                      <span className="opacity-0 group-hover:opacity-100 transition text-xs font-bold uppercase tracking-wider relative z-30 drop-shadow-md">Suggest</span>
+                    </button>
+                  )}
                 </div>
               )}
 
-              {!isPositionGuessing && isActiveTeam && proposedIndex === index && phase !== 'REVEAL' && (
+              {!isPositionGuessingPhase && isActiveTeam && proposedIndex === index && phase !== 'REVEAL' && (
                 <div className="shrink-0 w-24 h-32 bg-pink-600/20 border-2 border-pink-500 rounded-lg flex items-center justify-center animate-pulse shadow-[0_0_15px_rgba(236,72,153,0.3)]">
                   <span className="text-pink-300 font-bold text-xs rotate-90 whitespace-nowrap uppercase tracking-widest">Locked</span>
                 </div>
@@ -424,7 +491,8 @@ function TimelineView({ team, hitsterData, isActiveTeam, isMyTeam, HTFN }: any) 
                 </div>
               )}
             </React.Fragment>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
