@@ -16,7 +16,6 @@ export class WSClient {
 
   private messageQueue: WSMessage[] = [];
   private needTokenRefresh = false;
-  private intentionalDisconnect = false;
 
   constructor(private tokenProvider: (forceRefresh?: boolean) => Promise<string | null>, private page: string) { }
 
@@ -24,7 +23,6 @@ export class WSClient {
     if (this.ws?.readyState === WebSocket.OPEN) return;
 
     this.setStatus('connecting');
-    this.intentionalDisconnect = false;
 
     const token = await this.tokenProvider(this.needTokenRefresh);
     this.needTokenRefresh = false;
@@ -72,10 +70,6 @@ export class WSClient {
 
     this.ws.onclose = (event) => {
       console.log('WebSocket disconnected', event.code, event.reason);
-      if (this.intentionalDisconnect) {
-        console.log('Intentional disconnect, not reconnecting.');
-        // return;
-      }
       if (event.code === 4001 || event.code === 1008 || (event.reason && (event.reason.includes('token') || event.reason.includes('expired')))) {
         console.log('WS auth failure detected, will refresh token on reconnect');
         this.needTokenRefresh = true;
@@ -138,6 +132,11 @@ export class WSClient {
     this.statusHandlers.forEach((h) => {
       try { h(s); } catch (e) { console.error('status handler', e); }
     });
+    if (wsClient === this) {
+      globalStatusSubscribers.forEach((h) => {
+        try { h(s); } catch (e) { console.error('status handler', e); }
+      });
+    }
   }
 
   send(message: WSMessage): boolean {
@@ -198,37 +197,38 @@ export class WSClient {
   }
 
   disconnect() {
-    this.intentionalDisconnect = true;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
     this.stopHeartbeat();
     if (this.ws) {
+      this.ws.onclose = null;
+      this.ws.onerror = null;
+      this.ws.onmessage = null;
+      this.ws.onopen = null;
       this.ws.close();
       this.ws = null;
     }
+    this.setStatus('disconnected');
   }
 }
 
 let wsClient: WSClient | null = null;
-const pendingStatusSubscribers: ((s: string) => void)[] = [];
+const globalStatusSubscribers: ((s: string) => void)[] = [];
 
 export function subscribeToWSStatus(cb: (s: string) => void) {
+  globalStatusSubscribers.push(cb);
   if (wsClient) {
-    wsClient.onStatus(cb);
+    cb(wsClient.getStatus());
   } else {
-    pendingStatusSubscribers.push(cb);
+    cb('disconnected');
   }
 }
 
 export function unsubscribeToWSStatus(cb: (s: string) => void) {
-  if (wsClient) {
-    wsClient.offStatus(cb);
-  } else {
-    const idx = pendingStatusSubscribers.indexOf(cb);
-    if (idx !== -1) pendingStatusSubscribers.splice(idx, 1);
-  }
+  const idx = globalStatusSubscribers.indexOf(cb);
+  if (idx !== -1) globalStatusSubscribers.splice(idx, 1);
 }
 
 export function getWSStatus() {
@@ -252,8 +252,6 @@ export function createWS(accessToken: string, page: string) {
 
   wsClient = new WSClient(provider, page);
 
-  pendingStatusSubscribers.forEach((cb) => wsClient && wsClient.onStatus(cb));
-  pendingStatusSubscribers.length = 0;
   wsClient.connect();
   return wsClient;
 }

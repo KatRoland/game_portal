@@ -307,6 +307,11 @@ class LobbyServer {
             userLobbies.forEach(lobby => {
               const currentLobby = this.Lobbies.find(l => l.id === lobby.id);
               if (!currentLobby) return;
+              
+              if (currentLobby.state === 'started') {
+                console.log(`[Lobby Disconnect] Player (${userId}) disconnected but lobby is started. Not archiving.`);
+                return;
+              }
 
               const playerIndex = currentLobby.players.findIndex(p => String(p.id) === String(userId));
               if (playerIndex !== -1) {

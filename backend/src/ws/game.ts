@@ -149,23 +149,15 @@ CoreCommands.set("game:next_game_mode", {
     if (game.nextGameModes.length > 0) {
       const nextMode = game.nextGameModes.shift()!;
       game.mode = nextMode.type;
-      game.currentGameModeData = null;
-
-      if (nextMode.type === GameMode.QA) {
-        game.currentGameModeData = { question: null, answers: [], Scoreboard: game.Scoreboard } as any;
-      }
-      else if (nextMode.type === GameMode.MUSIC_QUIZ) {
-        if (!nextMode.playlist) return ctx.sendToClient({ type: "game:error", message: "music_quiz_requires_playlist" });
-        const playlist = await prisma.musicQuizPlaylistTrack.findMany({ where: { playlistId: nextMode.playlist }, include: { track: true } });
-        if (!playlist || playlist.length === 0) return ctx.sendToClient({ type: "game:error", message: "music_quiz_playlist_not_found" });
-        const shuffledTracks = shuffleArray(playlist);
-        game.currentGameModeData = { currentTrackIndex: 0, currentTrack: shuffledTracks[0].track, tracks: shuffledTracks.map(t => t.track), Scoreboard: game.Scoreboard, replays: [], answers: [] } as any;
-        (game.currentGameModeData as any).trackLength = shuffledTracks.length;
-      } else if (nextMode.type === GameMode.SMASH_OR_PASS) {
-        const order = shuffleArray(game.lobby.players.map(p => String(p.id)));
-        game.currentGameModeData = { order, currentIndex: 0, submissions: [], isVotingOpen: false, Scoreboard: game.Scoreboard } as any;
-      } else if (nextMode.type === GameMode.SMASH_OR_PASS_PLAYLIST) {
-        game.currentGameModeData = { items: [], currentIndex: 0, currentVotes: [], pickerId: null, Scoreboard: game.Scoreboard } as any;
+      try {
+        game.currentGameModeData = await createGameModeData(
+          nextMode.type,
+          nextMode.playlist,
+          game.lobby.players,
+          game.Scoreboard!
+        );
+      } catch (error: any) {
+        return ctx.sendToClient({ type: "game:error", message: error.message || "failed_to_initialize_gamemode" });
       }
 
       const { currentGameModeData, ...safeGame } = game;
