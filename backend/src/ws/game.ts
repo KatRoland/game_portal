@@ -10,6 +10,7 @@ import { QA } from "../types/gamemode/QA";
 import { IGameModeHandler, GameModeContext } from "../types/GameModeHandler";
 import { MusicQuizHandler } from "./gamemodes/mq";
 import { UnoHandler } from "./gamemodes/uno";
+import { HitsterHandler } from "./gamemodes/hitster";
 import { Scoreboard } from "../types/Score";
 import { NextGameMode } from "../types/NextGameMode";
 import { MUSIC_QUIZ } from "../types/gamemode/MUSIC_QUIZ";
@@ -67,6 +68,7 @@ function shuffleArray<T>(array: T[]): T[] {
 const COMPONENT_HANDLERS: Record<string, IGameModeHandler> = {
   mq: new MusicQuizHandler(),
   uno: new UnoHandler(),
+  hitster: new HitsterHandler(),
   // qa: new QAHandler(),
   // btn: new ButtonClickerHandler(),
 };

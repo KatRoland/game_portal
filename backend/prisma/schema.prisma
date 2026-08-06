@@ -151,3 +151,12 @@ model HitsterSong {
 
   @@index([year])
 }
+
+model HitsterSongsUsed {
+  id        String   @id @default(uuid())
+  gameId    String
+  songId    String
+  createdAt DateTime @default(now())
+
+  @@unique([gameId, songId])
+}

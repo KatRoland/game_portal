@@ -2,6 +2,7 @@ import prisma from "../db/prisma";
 import { GameMode } from "../types/GameMode";
 import { Scoreboard } from "../types/Score";
 import { UNO, UNOCard, UNOCardInHand, UNOPlayer, GameRules } from "../types/gamemode/UNO";
+import { Hitster, HitsterPlayer, HitsterTeam } from "../types/gamemode/HITSTER";
 
 function shuffleArray<T>(array: T[]): T[] {
     const arr = [...array];
@@ -192,6 +193,52 @@ export async function createGameModeData(
             return unoState;
         }
 
+
+        case GameMode.HITSTER: {
+            const hitsterPlayers: Record<string, HitsterPlayer> = {};
+            for (const p of players) {
+                hitsterPlayers[String(p.id)] = {
+                    playerId: String(p.id),
+                    name: p.username || 'Anonymous',
+                    isReady: false,
+                    teamId: null
+                };
+            }
+
+            const teams: Record<string, HitsterTeam> = {
+                "team1": {
+                    teamId: "team1",
+                    name: "Team 1",
+                    playerIds: [],
+                    leaderId: null,
+                    timeline: [],
+                    tokens: 3,
+                    proposedGuesses: []
+                },
+                "team2": {
+                    teamId: "team2",
+                    name: "Team 2",
+                    playerIds: [],
+                    leaderId: null,
+                    timeline: [],
+                    tokens: 3,
+                    proposedGuesses: []
+                }
+            };
+
+            return {
+                state: 'WAITING',
+                stealRule: 'BAD_GUESS',
+                turnState: null,
+                players: hitsterPlayers,
+                teams,
+                teamOrder: ["team1", "team2"],
+                currentTurnTeamId: null,
+                currentSong: null,
+                cardsToWin: 10,
+                Scoreboard: scoreboard,
+            };
+        }
 
         default:
             return null;

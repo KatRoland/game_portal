@@ -8,5 +8,6 @@ export enum GameMode{
     Karaoke_Duett = "Karaoke_Duett",
     SMASH_OR_PASS = "SMASH_OR_PASS",
     SMASH_OR_PASS_PLAYLIST = "SMASH_OR_PASS_PLAYLIST",
-    UNO = "UNO"
+    UNO = "UNO",
+    HITSTER = "HITSTER"
 }
