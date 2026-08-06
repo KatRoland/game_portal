@@ -58,12 +58,17 @@ export class HitsterHandler implements IGameModeHandler {
             return;
         }
 
+        function broadcast(dataType: string = "hitster:state_updated") {
+            ctx.broadcast({ type: dataType, payload: { hitsterData } });
+        }
+
         try {
             switch (ctx.dataType) {
                 case "hitster:ready": {
                     if (hitsterData.players[ctx.userId]) {
+                        console.log(`[Hitster] User ${ctx.userId} is ready`);
                         hitsterData.players[ctx.userId].isReady = true;
-                        ctx.broadcast({ type: "hitster:state_updated", payload: { players: hitsterData.players } });
+                        broadcast("hitster:state_updated");
                     }
                     break;
                 }
@@ -71,7 +76,7 @@ export class HitsterHandler implements IGameModeHandler {
                 case "hitster:unready": {
                     if (hitsterData.players[ctx.userId]) {
                         hitsterData.players[ctx.userId].isReady = false;
-                        ctx.broadcast({ type: "hitster:state_updated", payload: { players: hitsterData.players } });
+                        broadcast("hitster:state_updated");
                     }
                     break;
                 }
@@ -80,11 +85,11 @@ export class HitsterHandler implements IGameModeHandler {
                     if (ctx.game.lobby.host.id !== ctx.userId) {
                         return ctx.send({ type: "hitster:error", payload: { notificationLevel: "toast", message: "only_host_can_update_settings" } });
                     }
-                    
+
                     const stealRule = ctx.payload.stealRule;
                     if (stealRule === 'BAD_GUESS' || stealRule === 'LOWER_HIGHER') {
                         hitsterData.stealRule = stealRule;
-                        ctx.broadcast({ type: "hitster:state_updated", payload: { stealRule: hitsterData.stealRule } });
+                        broadcast("hitster:state_updated");
                     }
                     break;
                 }
@@ -108,7 +113,7 @@ export class HitsterHandler implements IGameModeHandler {
                         proposedGuesses: []
                     };
                     hitsterData.teamOrder.push(newTeamId);
-                    ctx.broadcast({ type: "hitster:state_updated", payload: { teams: hitsterData.teams, teamOrder: hitsterData.teamOrder } });
+                    broadcast("hitster:state_updated");
                     break;
                 }
 
@@ -129,11 +134,12 @@ export class HitsterHandler implements IGameModeHandler {
                     }
                     delete hitsterData.teams[targetTeamId];
                     hitsterData.teamOrder = hitsterData.teamOrder.filter(id => id !== targetTeamId);
-                    ctx.broadcast({ type: "hitster:state_updated", payload: { players: hitsterData.players, teams: hitsterData.teams, teamOrder: hitsterData.teamOrder } });
+                    broadcast("hitster:state_updated");
                     break;
                 }
 
                 case "hitster:join_team": {
+                    console.log(`[Hitster] HANDLING JOIN TEAM ${ctx.payload.teamId} for user ${ctx.userId}`)
                     const targetTeamId = ctx.payload.teamId;
                     if (!hitsterData.teams[targetTeamId] || !hitsterData.players[ctx.userId]) return;
 
@@ -146,14 +152,13 @@ export class HitsterHandler implements IGameModeHandler {
                         hitsterData.teams[oldTeamId].proposedGuesses = hitsterData.teams[oldTeamId].proposedGuesses.filter(g => g.playerId !== ctx.userId);
                     }
 
-                    hitsterData.players[ctx.userId].teamId = targetTeamId;
                     hitsterData.teams[targetTeamId].playerIds.push(ctx.userId);
-
+                    hitsterData.players[ctx.userId].teamId = targetTeamId;
                     if (!hitsterData.teams[targetTeamId].leaderId) {
                         hitsterData.teams[targetTeamId].leaderId = ctx.userId;
                     }
 
-                    ctx.broadcast({ type: "hitster:state_updated", payload: { players: hitsterData.players, teams: hitsterData.teams } });
+                    broadcast("hitster:state_updated");
                     break;
                 }
 
@@ -169,7 +174,7 @@ export class HitsterHandler implements IGameModeHandler {
 
                     if (hitsterData.teams[teamId].playerIds.includes(newLeaderId)) {
                         hitsterData.teams[teamId].leaderId = newLeaderId;
-                        ctx.broadcast({ type: "hitster:state_updated", payload: { teams: hitsterData.teams } });
+                        broadcast("hitster:state_updated");
                     }
                     break;
                 }
@@ -187,7 +192,7 @@ export class HitsterHandler implements IGameModeHandler {
                     } else {
                         hitsterData.teams[teamId].proposedGuesses.push({ playerId: ctx.userId, index });
                     }
-                    ctx.broadcast({ type: "hitster:state_updated", payload: { teams: hitsterData.teams } });
+                    broadcast("hitster:state_updated");
                     break;
                 }
 
@@ -252,15 +257,7 @@ export class HitsterHandler implements IGameModeHandler {
                         challengeTimerEndsAt: null
                     };
 
-                    ctx.broadcast({
-                        type: "hitster:game_started", payload: {
-                            state: hitsterData.state,
-                            teamOrder: hitsterData.teamOrder,
-                            teams: hitsterData.teams,
-                            currentTurnTeamId: hitsterData.currentTurnTeamId,
-                            currentSong: hitsterData.currentSong
-                        }
-                    });
+                    broadcast("hitster:game_started");
                     break;
                 }
 
@@ -296,7 +293,7 @@ export class HitsterHandler implements IGameModeHandler {
                         }
                     }
 
-                    ctx.broadcast({ type: "hitster:state_updated", payload: { turnState: hitsterData.turnState, teams: hitsterData.teams } });
+                    broadcast("hitster:state_updated");
                     break;
                 }
 
@@ -305,7 +302,7 @@ export class HitsterHandler implements IGameModeHandler {
                     if (teamId !== hitsterData.currentTurnTeamId || hitsterData.turnState?.phase !== 'NAME_GUESS_ACTIVE') return;
 
                     hitsterData.turnState.phase = 'POSITION_GUESS';
-                    ctx.broadcast({ type: "hitster:state_updated", payload: { turnState: hitsterData.turnState } });
+                    broadcast("hitster:state_updated");
                     break;
                 }
 
@@ -319,7 +316,7 @@ export class HitsterHandler implements IGameModeHandler {
 
                     if (!hitsterData.turnState.nameCallQueue.includes(teamId)) {
                         hitsterData.turnState.nameCallQueue.push(teamId);
-                        ctx.broadcast({ type: "hitster:state_updated", payload: { turnState: hitsterData.turnState } });
+                        broadcast("hitster:state_updated");
                     }
                     break;
                 }
@@ -337,12 +334,12 @@ export class HitsterHandler implements IGameModeHandler {
                     hitsterData.turnState.phase = 'POSITION_CHALLENGE';
                     hitsterData.turnState.challengeTimerEndsAt = Date.now() + 10000;
 
-                    ctx.broadcast({ type: "hitster:state_updated", payload: { turnState: hitsterData.turnState } });
+                    broadcast("hitster:state_updated");
 
                     setTimeout(() => {
                         if (hitsterData && hitsterData.turnState && hitsterData.turnState.phase === 'POSITION_CHALLENGE') {
                             hitsterData.turnState.phase = 'REVEAL';
-                            ctx.broadcast({ type: "hitster:state_updated", payload: { turnState: hitsterData.turnState } });
+                            broadcast("hitster:state_updated");
                         }
                     }, 10000);
                     break;
@@ -361,7 +358,7 @@ export class HitsterHandler implements IGameModeHandler {
                     if (!existing) {
                         hitsterData.teams[teamId].tokens -= 1;
                         hitsterData.turnState.challenges.push({ teamId, type: challengeType });
-                        ctx.broadcast({ type: "hitster:state_updated", payload: { turnState: hitsterData.turnState, teams: hitsterData.teams } });
+                        broadcast("hitster:state_updated");
                     }
                     break;
                 }
@@ -377,7 +374,7 @@ export class HitsterHandler implements IGameModeHandler {
                         const log = hitsterData.turnState.nameGuessHistory.find(h => h.teamId === teamId);
                         if (log) log.isCorrect = true;
 
-                        ctx.broadcast({ type: "hitster:state_updated", payload: { turnState: hitsterData.turnState, teams: hitsterData.teams } });
+                        broadcast("hitster:state_updated");
                     }
                     break;
                 }
@@ -446,15 +443,7 @@ export class HitsterHandler implements IGameModeHandler {
                         hitsterData.state = 'GAME_OVER';
                     }
 
-                    ctx.broadcast({
-                        type: "hitster:state_updated", payload: {
-                            turnState: hitsterData.turnState,
-                            teams: hitsterData.teams,
-                            currentTurnTeamId: hitsterData.currentTurnTeamId,
-                            currentSong: hitsterData.currentSong,
-                            state: hitsterData.state
-                        }
-                    });
+                    broadcast("hitster:state_updated");
                     break;
                 }
 

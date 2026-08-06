@@ -9,12 +9,13 @@ import MusicQuiz from '@/components/games/musicquiz';
 import BTN from '@/components/games/BTN';
 import CrossGame from '@/components/games/CrossGame';
 import EndGame from '@/components/games/EndGame';
-import { GameQuestion, Game, Score, Scoreboard, GameFN, MQFN, KSFN, Karaoke_Solo, KaraokeVote, KDFN, SOP_FN, SOPPL_FN, SOPPLItem, UNO_FN, UNOGameRules } from '@/types';
+import { GameQuestion, Game, Score, Scoreboard, GameFN, MQFN, KSFN, Karaoke_Solo, KaraokeVote, KDFN, SOP_FN, SOPPL_FN, SOPPLItem, UNO_FN, UNOGameRules, HTFN } from '@/types';
 import KaraokeSolo from '@/components/games/karaokesolo';
 import KaraokeDuett from '@/components/games/karaokeduett';
 import SmashOrPass from '@/components/games/SmashOrPass';
 import SmashOrPassPlaylist from '@/components/games/SmashOrPassPlaylist';
 import UNO from '@/components/games/UNO';
+import Hitster from '@/components/games/Hitster';
 import { getAccessToken } from '@/lib/api'
 
 export default function GamePage() {
@@ -187,6 +188,30 @@ export default function GamePage() {
     chooseColor: (color: 'red' | 'green' | 'blue' | 'yellow') => { wsRef.current?.send({ type: 'uno:choose_color', payload: { gameId: id, color } }) },
     restartGame: () => { wsRef.current?.send({ type: 'uno:restart_game', payload: { gameId: id } }) },
     settingsChanged: (gameId: string, rules: UNOGameRules) => { wsRef.current?.send({ type: 'uno:settings_changed', payload: { gameId, rules } }) },
+  }
+
+  const HTFN: HTFN = {
+    toggleReady: () => {
+      const hitsterData = gameData?.currentGameModeData as any;
+      const me = hitsterData?.players[user?.id as string];
+      const isReady = me?.isReady;
+      wsRef.current?.send({ type: isReady ? 'hitster:unready' : 'hitster:ready', payload: { gameId: id } })
+    },
+    addTeam: () => { wsRef.current?.send({ type: 'hitster:add_team', payload: { gameId: id } }) },
+    removeTeam: (teamId: string) => { wsRef.current?.send({ type: 'hitster:remove_team', payload: { gameId: id, teamId } }) },
+    joinTeam: (teamId: string) => { wsRef.current?.send({ type: 'hitster:join_team', payload: { gameId: id, teamId } }) },
+    changeLeader: (playerId: string) => { wsRef.current?.send({ type: 'hitster:change_leader', payload: { gameId: id, playerId } }) },
+    updateSettings: (stealRule: any) => { wsRef.current?.send({ type: 'hitster:update_settings', payload: { gameId: id, stealRule } }) },
+    startGame: () => { wsRef.current?.send({ type: 'hitster:start_game', payload: { gameId: id } }) },
+
+    guessName: (guess: string) => { wsRef.current?.send({ type: 'hitster:guess_name', payload: { gameId: id, guess } }) },
+    passName: () => { wsRef.current?.send({ type: 'hitster:pass_name', payload: { gameId: id } }) },
+    callName: () => { wsRef.current?.send({ type: 'hitster:call_name', payload: { gameId: id } }) },
+    proposeGuess: (index: number) => { wsRef.current?.send({ type: 'hitster:propose_guess', payload: { gameId: id, index } }) },
+    lockPosition: (index: number) => { wsRef.current?.send({ type: 'hitster:lock_position', payload: { gameId: id, index } }) },
+    challengePosition: (type: 'BAD_GUESS' | 'LOWER' | 'HIGHER') => { wsRef.current?.send({ type: 'hitster:challenge_position', payload: { gameId: id, type } }) },
+    hostOverrideName: (teamId: string) => { wsRef.current?.send({ type: 'hitster:host_override_name', payload: { gameId: id, teamId } }) },
+    nextTurn: () => { wsRef.current?.send({ type: 'hitster:next_turn', payload: { gameId: id } }) },
   }
 
   useEffect(() => {
@@ -525,6 +550,22 @@ export default function GamePage() {
         })
       }
 
+      const declareHitsterListeners = () => {
+        const updateHitsterState = (payload: any) => {
+          setGameData((prev) => {
+            if (!prev) return prev;
+            return { ...prev, currentGameModeData: payload.hitsterData };
+          });
+        };
+
+        wsRef.current?.on('hitster:state_updated', updateHitsterState);
+        wsRef.current?.on('hitster:game_started', updateHitsterState);
+
+        wsRef.current?.on('hitster:error', (payload: any) => {
+          console.error("[HITSTER ERROR]", payload.message);
+        });
+      };
+
       loadFN();
       declareGAMEListeners();
       declareMQListeners();
@@ -532,6 +573,7 @@ export default function GamePage() {
       declareKSListeners();
       declareKDListeners();
       declareUNOListeners();
+      declareHitsterListeners();
       wsRef.current?.on('sop:update_submissions', (payload: any) => {
         setGameData((prev) => {
           if (!prev) return prev;
@@ -613,6 +655,10 @@ export default function GamePage() {
         case 'UNO':
           return (
             <UNO isHost={isHost} GameFN={GameFN} UNOFN={UNOFN} GameData={gameData} error={unoError} clearError={() => setUnoError(null)} />
+          );
+        case 'HITSTER':
+          return (
+            <Hitster isHost={isHost} GameFN={GameFN} HTFN={HTFN} GameData={gameData} />
           );
         case 'Cross':
           return (

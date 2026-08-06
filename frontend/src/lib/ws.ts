@@ -73,8 +73,8 @@ export class WSClient {
     this.ws.onclose = (event) => {
       console.log('WebSocket disconnected', event.code, event.reason);
       if (this.intentionalDisconnect) {
-          console.log('Intentional disconnect, not reconnecting.');
-          return;
+        console.log('Intentional disconnect, not reconnecting.');
+        // return;
       }
       if (event.code === 4001 || event.code === 1008 || (event.reason && (event.reason.includes('token') || event.reason.includes('expired')))) {
         console.log('WS auth failure detected, will refresh token on reconnect');

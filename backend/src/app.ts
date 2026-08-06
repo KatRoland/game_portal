@@ -74,6 +74,7 @@ app.use("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 app.use("/uploads", express.static(path.resolve("uploads")));
+app.use("/previews", express.static(path.resolve("previews")));
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });

@@ -288,7 +288,7 @@ export class GameServer {
 
       const idx = this.games.findIndex((g: any) => g.id === gameId);
       if (idx !== -1) this.games[idx] = game;
-
+      console.log(`[GameServer.initGame Debug]: ${JSON.stringify(game)}`)
       console.log(`[GameServer.initGame] Game ${gameId} initialized with mode ${game.mode}`);
       console.log(`[GameServer.initGame] GameModeData: ${JSON.stringify(game.currentGameModeData)}`)
 
@@ -546,11 +546,16 @@ export class GameServer {
   }
 
   broadcastToLobby(lobbyId: string, msg: unknown) {
+    console.log(`broadcasting to lobby: ${lobbyId}`)
     const lobby = this.games.find(l => l.id === lobbyId);
     if (!lobby || (lobby as any).state === "initializing") return;
+    console.log("lobby found, broadcasting")
     const text = JSON.stringify(msg);
+    console.log("lobby.players: ", lobby.lobby.players)
+    console.log(`[broadcast debug] ${JSON.stringify(lobby)}`)
     for (const c of this.clients.values()) {
       if (!lobby.lobby.players.find(p => p.id == c.user?.id)) continue;
+      console.log("client found, broadcasting")
       try {
         c.ws.send(text);
       } catch (err) {

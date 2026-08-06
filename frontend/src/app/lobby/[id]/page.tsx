@@ -145,6 +145,7 @@ export default function LobbyRoomPage() {
       { id: 'gm6', type: GameMode.SMASH_OR_PASS, title: "Smash or Pass", createdAt: new Date().toISOString(), hasPlaylist: false },
       { id: 'gm7', type: GameMode.SMASH_OR_PASS_PLAYLIST, title: "Smash or Pass (Playlist)", createdAt: new Date().toISOString(), hasPlaylist: true },
       { id: 'gm8', type: GameMode.UNO, title: "UNO", createdAt: new Date().toISOString(), hasPlaylist: false },
+      { id: 'gm9', type: GameMode.HITSTER, title: "Hitster", createdAt: new Date().toISOString(), hasPlaylist: false },
     ]
   }
 
