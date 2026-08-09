@@ -149,6 +149,9 @@ function LobbyView({ hitsterData, isHost, user, HTFN, GameFN }: any) {
             </div>
 
             <div className="flex gap-3 ml-auto">
+              <button onClick={() => HTFN.randomizeTeams()} className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 rounded-lg transition font-medium text-sm shadow-lg">
+                Randomize Teams
+              </button>
               <button onClick={() => HTFN.addTeam()} className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition font-medium text-sm">
                 + Add Team
               </button>

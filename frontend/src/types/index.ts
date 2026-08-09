@@ -409,6 +409,7 @@ export interface HTFN {
   joinTeam: (teamId: string) => void;
   changeLeader: (playerId: string) => void;
   updateSettings: (stealRule: StealRule) => void;
+  randomizeTeams: () => void;
   startGame: () => void;
 
   guessName: (guess: string) => void;

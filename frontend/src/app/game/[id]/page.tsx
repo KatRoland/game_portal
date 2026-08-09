@@ -202,6 +202,7 @@ export default function GamePage() {
     joinTeam: (teamId: string) => { wsRef.current?.send({ type: 'hitster:join_team', payload: { gameId: id, teamId } }) },
     changeLeader: (playerId: string) => { wsRef.current?.send({ type: 'hitster:change_leader', payload: { gameId: id, playerId } }) },
     updateSettings: (stealRule: any) => { wsRef.current?.send({ type: 'hitster:update_settings', payload: { gameId: id, stealRule } }) },
+    randomizeTeams: () => { wsRef.current?.send({ type: 'hitster:randomize_teams', payload: { gameId: id } }) },
     startGame: () => { wsRef.current?.send({ type: 'hitster:start_game', payload: { gameId: id } }) },
 
     guessName: (guess: string) => { wsRef.current?.send({ type: 'hitster:guess_name', payload: { gameId: id, guess } }) },

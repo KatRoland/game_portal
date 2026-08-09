@@ -117,6 +117,43 @@ export class HitsterHandler implements IGameModeHandler {
                     break;
                 }
 
+                case "hitster:randomize_teams": {
+                    if (ctx.game.lobby.host.id !== ctx.userId) {
+                        return ctx.send({ type: "hitster:error", payload: { notificationLevel: "toast", message: "only_host_can_randomize_teams" } });
+                    }
+                    if (hitsterData.teamOrder.length < 2) {
+                        return ctx.send({ type: "hitster:error", payload: { notificationLevel: "toast", message: "not_enough_teams_to_randomize" } });
+                    }
+
+                    const allPlayers = Object.keys(hitsterData.players);
+                    for (let i = allPlayers.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [allPlayers[i], allPlayers[j]] = [allPlayers[j], allPlayers[i]];
+                    }
+
+                    hitsterData.teamOrder.forEach(teamId => {
+                        hitsterData.teams[teamId].playerIds = [];
+                        hitsterData.teams[teamId].leaderId = null;
+                        hitsterData.teams[teamId].proposedGuesses = [];
+                    });
+
+                    let teamIndex = 0;
+                    allPlayers.forEach(playerId => {
+                        const teamId = hitsterData.teamOrder[teamIndex];
+                        hitsterData.teams[teamId].playerIds.push(playerId);
+                        hitsterData.players[playerId].teamId = teamId;
+                        
+                        if (!hitsterData.teams[teamId].leaderId) {
+                            hitsterData.teams[teamId].leaderId = playerId;
+                        }
+
+                        teamIndex = (teamIndex + 1) % hitsterData.teamOrder.length;
+                    });
+
+                    broadcast("hitster:state_updated");
+                    break;
+                }
+
                 case "hitster:remove_team": {
                     if (ctx.game.lobby.host.id !== ctx.userId) {
                         return ctx.send({ type: "hitster:error", payload: { notificationLevel: "toast", message: "only_host_can_remove_team" } });
