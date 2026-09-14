@@ -140,10 +140,13 @@ function checkIfEnd(ctx: GameModeContext, unoData: UNO): boolean {
     }
 
     if (unoData.gameRules.endCondition === "last_standing" && Object.values(unoData.players).filter(p => p.stillPlaying).length === 1) {
-        unoData.state.activePhase = "round_ended";
-        unoData.state.activePhaseData = { phase: "round_ended", winnerId: unoData.playersWhoOut[0].playerId };
-        broadcastState(ctx, unoData)
-        return true;
+        if (unoData.playersWhoOut && unoData.playersWhoOut.length > 0) {
+            unoData.state.activePhase = "round_ended";
+            unoData.state.activePhaseData = { phase: "round_ended", winnerId: unoData.playersWhoOut[0].playerId };
+            broadcastState(ctx, unoData)
+            return true;
+        }
+        return false;
     }
 
     return false;
@@ -402,6 +405,7 @@ export class UnoHandler implements IGameModeHandler {
                     const hadCardsBefore = currentPlayer.cards.length;
                     currentPlayer.cards = currentPlayer.cards.filter(c => !cardIdSet.has(c.id as string));
                     unoData.lastPlayedPlayerId = playerId;
+                    unoData.playCount = (unoData.playCount || 0) + 1;
 
                     if (
                         unoData.gameRules.uno &&

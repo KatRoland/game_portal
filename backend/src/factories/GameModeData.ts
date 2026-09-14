@@ -174,6 +174,8 @@ export async function createGameModeData(
 
             const unoState: UNO = {
                 currentTurnPlayerId: playerOrderIds[0] || "",
+                lastPlayedPlayerId: "",
+                playCount: 0,
                 playerOrderIds: playerOrderIds,
                 topCard: null,
                 drawPile: [],

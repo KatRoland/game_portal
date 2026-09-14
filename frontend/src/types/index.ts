@@ -281,6 +281,7 @@ export type UNOPhaseData =
 export interface UNOState {
   currentTurnPlayerId: string;
   lastPlayedPlayerId?: string;
+  playCount?: number;
   playerOrderIds: string[];
   topCard: UNOCard;
   drawPile: UNOCard[];

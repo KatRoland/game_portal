@@ -464,6 +464,7 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
   const [topCardLanding, setTopCardLanding] = useState(false);
   const prevTopCardRef = useRef<UNOCard | null>(null);
   const prevTurnPlayerRef = useRef<string | null>(null);
+  const prevPlayCountRef = useRef<number>(0);
   const prevHandLenRef = useRef<number>(0);
   const prevOtherCardCountsRef = useRef<Map<string, number>>(new Map());
   const topCardElRef = useRef<HTMLDivElement>(null);
@@ -490,25 +491,24 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
 
   useEffect(() => {
     const newTop = unoState?.topCard || null;
-    const oldTop = prevTopCardRef.current;
     const currentTurn = unoState?.currentTurnPlayerId || null;
-    const prevTurn = prevTurnPlayerRef.current;
+    const lastPlayed = unoState?.lastPlayedPlayerId || null;
+    const playCount = unoState?.playCount ?? 0;
+    const prevPlayCount = prevPlayCountRef.current;
     const currentHandLen = userHand.length;
     const prevHandLen = prevHandLenRef.current;
 
     prevTopCardRef.current = newTop;
     prevTurnPlayerRef.current = currentTurn;
+    prevPlayCountRef.current = playCount;
 
-    if (!newTop || !oldTop) return;
-    if (
-      newTop.color === oldTop.color &&
-      newTop.type === oldTop.type &&
-      newTop.value === oldTop.value
-    ) return;
+    if (!newTop) return;
+    // playCount increments on every card play on the server — works in solo mode
+    // and for same-card plays where topCard fields and lastPlayedPlayerId don't change.
+    if (playCount === 0 || playCount === prevPlayCount) return;
 
     const wePlayedCard = currentHandLen < prevHandLen;
-
-    const whoPlayedId = prevTurn;
+    const whoPlayedId = lastPlayed || currentTurn;
 
     const targetEl = topCardElRef.current;
     if (!targetEl) return;
@@ -557,7 +557,7 @@ export default function UNO({ GameData, GameFN, isHost, UNOFN, error, clearError
     setTopCardLanding(true);
     const glowTimer = setTimeout(() => setTopCardLanding(false), 700);
     return () => clearTimeout(glowTimer);
-  }, [unoState?.topCard?.color, unoState?.topCard?.type, unoState?.topCard?.value, unoState?.currentTurnPlayerId]);
+  }, [unoState?.playCount]);
 
   useEffect(() => {
     const pileEl = drawPileElRef.current;
