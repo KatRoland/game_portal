@@ -23,3 +23,7 @@ export function endGame(lobbyId: string) {
   lobbyServer.endGame(lobbyId);
 }
 
+export function purgeLobby(lobbyId: string) {
+  lobbyServer.purgeLobby(lobbyId);
+}
+

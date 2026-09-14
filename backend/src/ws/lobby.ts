@@ -307,7 +307,7 @@ class LobbyServer {
             userLobbies.forEach(lobby => {
               const currentLobby = this.Lobbies.find(l => l.id === lobby.id);
               if (!currentLobby) return;
-              
+
               if (currentLobby.state === 'started') {
                 console.log(`[Lobby Disconnect] Player (${userId}) disconnected but lobby is started. Not archiving.`);
                 return;
@@ -383,6 +383,10 @@ class LobbyServer {
     if (!lobby) return;
     lobby.state = 'waiting';
     this.broadcastToLobby(lobby.id, { type: "lobby:game_finished", payload: { lobbyId: lobbyId } });
+  }
+
+  public purgeLobby(lobbyyId: string) {
+    this.Lobbies.splice(this.Lobbies.findIndex(l => l.id === lobbyyId), 1);
   }
 }
 

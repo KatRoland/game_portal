@@ -26,7 +26,7 @@ import {
 import { createGameModeData } from "../factories/GameModeData";
 
 import { JWT_SECRET } from "../config";
-import { endGame } from "./handlers";
+import { endGame, purgeLobby } from "./handlers";
 
 interface CommandContext {
   id: string;
@@ -230,8 +230,10 @@ export class GameServer {
 
   public removeGame(gameId: string) {
     const gameIndex = this.games.findIndex((g: any) => g.id === gameId);
+    const lobbyId = this.games[gameIndex].lobby.id;
     if (gameIndex !== -1) {
       this.games.splice(gameIndex, 1);
+      purgeLobby(lobbyId);
       console.log(`[Garbage Collection] Room ${gameId} successfully purged from RAM.`);
     }
   }
