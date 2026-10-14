@@ -248,6 +248,10 @@ function ActiveTurnView({ hitsterData, isHost, user, HTFN }: any) {
 
   const myTeamFailedName = hitsterData.turnState?.nameGuessHistory.some((h: any) => h.teamId === myTeamId);
   const myTeamInQueue = hitsterData.turnState?.nameCallQueue.includes(myTeamId);
+  const myTeamChallenge = hitsterData.turnState?.challenges?.find((c: any) => c.teamId === myTeamId);
+  const firstChallenge = hitsterData.turnState?.challenges?.[0];
+  const challengerTeam = firstChallenge ? hitsterData.teams[firstChallenge.teamId] : null;
+  const anyTeamChallenged = (hitsterData.turnState?.challenges?.length ?? 0) > 0;
 
   const queueActive = hitsterData.turnState?.nameCallQueue.length > 0;
 
@@ -320,19 +324,35 @@ function ActiveTurnView({ hitsterData, isHost, user, HTFN }: any) {
                   </button>
                 </div>
               ) : phase === 'POSITION_CHALLENGE' && !isActiveTeam ? (
-                <div className="flex flex-col items-center gap-3">
-                  <span className="text-sm font-bold text-gray-400 uppercase tracking-wider">Cost: 1 Token</span>
-                  {hitsterData.stealRule === 'BAD_GUESS' ? (
-                    <button onClick={() => HTFN.challengePosition('BAD_GUESS')} className="bg-red-600/90 px-8 py-3 rounded-xl font-bold hover:bg-red-500 transition shadow-lg">
-                      Challenge: They are wrong!
-                    </button>
-                  ) : (
-                    <div className="flex gap-4">
-                      <button onClick={() => HTFN.challengePosition('LOWER')} className="bg-blue-600/90 px-8 py-3 rounded-xl font-bold hover:bg-blue-500 transition shadow-lg">Challenge: Older</button>
-                      <button onClick={() => HTFN.challengePosition('HIGHER')} className="bg-green-600/90 px-8 py-3 rounded-xl font-bold hover:bg-green-500 transition shadow-lg">Challenge: Newer</button>
-                    </div>
-                  )}
-                </div>
+                anyTeamChallenged ? (
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <span className="text-xs font-bold uppercase tracking-widest text-pink-400 bg-pink-500/10 border border-pink-500/30 px-3 py-1 rounded-full">
+                      Challenge Placed
+                    </span>
+                    <p className="text-lg font-bold text-white">
+                      {myTeamChallenge ? (
+                        <>You challenged: <span className="text-pink-400 font-extrabold">{myTeamChallenge.type === 'BAD_GUESS' ? 'They are wrong!' : myTeamChallenge.type === 'LOWER' ? 'Older' : 'Newer'}</span></>
+                      ) : (
+                        <><span className="text-pink-400 font-extrabold">{challengerTeam?.name || 'Another team'}</span> challenged: <span className="text-yellow-400 font-extrabold">{firstChallenge?.type === 'BAD_GUESS' ? 'They are wrong!' : firstChallenge?.type === 'LOWER' ? 'Older' : 'Newer'}</span></>
+                      )}
+                    </p>
+                    <span className="text-sm text-gray-400">Waiting for challenge phase to finish...</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-3">
+                    <span className="text-sm font-bold text-gray-400 uppercase tracking-wider">Cost: 1 Token</span>
+                    {hitsterData.stealRule === 'BAD_GUESS' ? (
+                      <button onClick={() => HTFN.challengePosition('BAD_GUESS')} className="bg-red-600/90 px-8 py-3 rounded-xl font-bold hover:bg-red-500 transition shadow-lg">
+                        Challenge: They are wrong!
+                      </button>
+                    ) : (
+                      <div className="flex gap-4">
+                        <button onClick={() => HTFN.challengePosition('LOWER')} className="bg-blue-600/90 px-8 py-3 rounded-xl font-bold hover:bg-blue-500 transition shadow-lg">Challenge: Older</button>
+                        <button onClick={() => HTFN.challengePosition('HIGHER')} className="bg-green-600/90 px-8 py-3 rounded-xl font-bold hover:bg-green-500 transition shadow-lg">Challenge: Newer</button>
+                      </div>
+                    )}
+                  </div>
+                )
               ) : (
                 <div className="text-center text-gray-500 italic">No actions available for you right now.</div>
               )}
