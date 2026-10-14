@@ -62,12 +62,12 @@ export default function HitsterGame({ isHost, GameData, GameFN, HTFN }: HitsterP
             </button>
             <div className="flex items-center gap-2 ml-4">
               <Volume2 size={20} className="text-gray-300" />
-              <input 
-                type="range" 
-                min="0" 
-                max="1" 
-                step="0.01" 
-                value={volume} 
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={volume}
                 onChange={(e) => setVolume(parseFloat(e.target.value))}
                 className="w-24 accent-pink-500"
               />
@@ -255,7 +255,7 @@ function ActiveTurnView({ hitsterData, isHost, user, HTFN }: any) {
     <div className="flex flex-col h-full gap-4">
       {/* Top Section: Instructions & Interactions Side-by-Side */}
       <div className="flex flex-col lg:flex-row gap-4 shrink-0">
-        
+
         {/* Instruction / Top Banner */}
         <div className="flex-1 bg-white/5 backdrop-blur-md rounded-2xl p-6 text-center border border-white/10 shadow-xl flex flex-col justify-center items-center min-h-[160px]">
           {phase === 'NAME_GUESS_ACTIVE' && (
@@ -405,7 +405,7 @@ function TimelineView({ team, hitsterData, isActiveTeam, isMyTeam, HTFN, user }:
   const insertPoints = Array.from({ length: team.timeline.length + 1 }, (_, i) => i);
 
   return (
-    <div className={`bg-white/5 rounded-2xl p-4 border flex flex-col h-full ${isActiveTeam ? 'border-pink-500/50 shadow-[0_0_15px_rgba(236,72,153,0.15)] bg-pink-900/10' : 'border-white/5'}`}>
+    <div className={`bg-white/5 rounded-2xl p-4 border flex flex-col h-full ${isMyTeam ? 'col-span-full' : ''} ${isActiveTeam ? 'border-pink-500/50 shadow-[0_0_15px_rgba(236,72,153,0.15)] bg-pink-900/10' : 'border-white/5'}`}>
       <div className="flex justify-between items-center mb-3 shrink-0">
         <h3 className="text-lg font-bold flex items-center gap-2">
           {team.name}
@@ -426,74 +426,74 @@ function TimelineView({ team, hitsterData, isActiveTeam, isMyTeam, HTFN, user }:
         <div className="flex gap-2 overflow-x-auto items-center w-full min-h-[140px] custom-scrollbar pb-2">
           {insertPoints.map((index) => {
             const suggestions = team.proposedGuesses?.filter((g: any) => g.index === index) || [];
-            
+
             return (
-            <React.Fragment key={`insert-${index}`}>
-              {isPositionGuessingPhase && (
-                <div className="shrink-0 flex flex-col items-center justify-center w-24 h-32 relative">
-                  {suggestions.length > 0 && (
-                    <div className="absolute inset-0 flex flex-col justify-center items-center gap-1 z-10 pointer-events-none p-1">
-                      {suggestions.map((s: any) => {
-                        const pName = hitsterData.players[s.playerId]?.name || "Unknown";
-                        return (
-                          <div key={s.playerId} className="bg-blue-600/90 backdrop-blur-sm text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow whitespace-nowrap max-w-full overflow-hidden text-ellipsis border border-blue-400/50">
-                            {pName}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                  {canLock && (
-                    <button
-                      onClick={() => {
-                        if (confirmLockIndex === index) {
-                          HTFN.lockPosition(index);
-                          setConfirmLockIndex(null);
-                        } else {
-                          setConfirmLockIndex(index);
-                        }
-                      }}
-                      onMouseLeave={() => {
-                        if (confirmLockIndex === index) {
-                          setConfirmLockIndex(null);
-                        }
-                      }}
-                      className={`w-full h-full border-2 border-dashed rounded-lg transition flex flex-col items-center justify-center group relative z-20 ${confirmLockIndex === index ? 'border-yellow-400 bg-yellow-500/20 text-yellow-400' : suggestions.length > 0 ? 'border-blue-400 bg-blue-500/10 hover:border-pink-400 text-pink-400' : 'border-pink-500/40 hover:border-pink-400 text-pink-400'} hover:text-white`}
-                    >
-                      <div className={`absolute inset-0 transition pointer-events-none rounded-lg ${confirmLockIndex === index ? 'bg-black/80' : 'bg-black/0 group-hover:bg-black/70'}`} />
-                      <span className={`transition text-sm font-bold uppercase tracking-wider relative z-30 drop-shadow-md text-center ${confirmLockIndex === index ? 'opacity-100 text-yellow-400' : 'opacity-0 group-hover:opacity-100'}`}>
-                        {confirmLockIndex === index ? 'Confirm' : 'Lock'}
-                      </span>
-                    </button>
-                  )}
-                  {canSuggest && (
-                    <button
-                      onClick={() => HTFN.proposeGuess(index)}
-                      className={`w-full h-full border-2 border-dashed rounded-lg transition flex flex-col items-center justify-center group relative z-20 ${suggestions.find((s:any)=>s.playerId === String(user?.id)) ? 'border-blue-500 bg-blue-500/20' : 'border-blue-500/40 hover:border-blue-400'} text-blue-400 hover:text-white`}
-                    >
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/70 transition pointer-events-none rounded-lg" />
-                      <span className="opacity-0 group-hover:opacity-100 transition text-xs font-bold uppercase tracking-wider relative z-30 drop-shadow-md">Suggest</span>
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {!isPositionGuessingPhase && isActiveTeam && proposedIndex === index && phase !== 'REVEAL' && (
-                <div className="shrink-0 w-24 h-32 bg-pink-600/20 border-2 border-pink-500 rounded-lg flex items-center justify-center animate-pulse shadow-[0_0_15px_rgba(236,72,153,0.3)]">
-                  <span className="text-pink-300 font-bold text-xs rotate-90 whitespace-nowrap uppercase tracking-widest">Locked</span>
-                </div>
-              )}
-
-              {index < team.timeline.length && (
-                <div className="shrink-0 w-24 h-32 bg-black rounded-lg overflow-hidden relative shadow-lg group hover:-translate-y-1 transition-transform">
-                  <img src={team.timeline[index].card.albumCover} className="w-full h-full object-cover opacity-50 group-hover:opacity-30 transition" />
-                  <div className="absolute inset-0 flex flex-col items-center justify-center p-1.5 text-center">
-                    <span className="text-lg font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,1)]">{team.timeline[index].card.year}</span>
-                    <span className="text-[9px] font-medium text-gray-300 drop-shadow-[0_1px_1px_rgba(0,0,0,1)] line-clamp-2 mt-1 leading-tight">{team.timeline[index].card.title}</span>
+              <React.Fragment key={`insert-${index}`}>
+                {isPositionGuessingPhase && (
+                  <div className="shrink-0 flex flex-col items-center justify-center w-24 h-32 relative">
+                    {suggestions.length > 0 && (
+                      <div className="absolute inset-0 flex flex-col justify-center items-center gap-1 z-10 pointer-events-none p-1">
+                        {suggestions.map((s: any) => {
+                          const pName = hitsterData.players[s.playerId]?.name || "Unknown";
+                          return (
+                            <div key={s.playerId} className="bg-blue-600/90 backdrop-blur-sm text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow whitespace-nowrap max-w-full overflow-hidden text-ellipsis border border-blue-400/50">
+                              {pName}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {canLock && (
+                      <button
+                        onClick={() => {
+                          if (confirmLockIndex === index) {
+                            HTFN.lockPosition(index);
+                            setConfirmLockIndex(null);
+                          } else {
+                            setConfirmLockIndex(index);
+                          }
+                        }}
+                        onMouseLeave={() => {
+                          if (confirmLockIndex === index) {
+                            setConfirmLockIndex(null);
+                          }
+                        }}
+                        className={`w-full h-full border-2 border-dashed rounded-lg transition flex flex-col items-center justify-center group relative z-20 ${confirmLockIndex === index ? 'border-yellow-400 bg-yellow-500/20 text-yellow-400' : suggestions.length > 0 ? 'border-blue-400 bg-blue-500/10 hover:border-pink-400 text-pink-400' : 'border-pink-500/40 hover:border-pink-400 text-pink-400'} hover:text-white`}
+                      >
+                        <div className={`absolute inset-0 transition pointer-events-none rounded-lg ${confirmLockIndex === index ? 'bg-black/80' : 'bg-black/0 group-hover:bg-black/70'}`} />
+                        <span className={`transition text-sm font-bold uppercase tracking-wider relative z-30 drop-shadow-md text-center ${confirmLockIndex === index ? 'opacity-100 text-yellow-400' : 'opacity-0 group-hover:opacity-100'}`}>
+                          {confirmLockIndex === index ? 'Confirm' : 'Lock'}
+                        </span>
+                      </button>
+                    )}
+                    {canSuggest && (
+                      <button
+                        onClick={() => HTFN.proposeGuess(index)}
+                        className={`w-full h-full border-2 border-dashed rounded-lg transition flex flex-col items-center justify-center group relative z-20 ${suggestions.find((s: any) => s.playerId === String(user?.id)) ? 'border-blue-500 bg-blue-500/20' : 'border-blue-500/40 hover:border-blue-400'} text-blue-400 hover:text-white`}
+                      >
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/70 transition pointer-events-none rounded-lg" />
+                        <span className="opacity-0 group-hover:opacity-100 transition text-xs font-bold uppercase tracking-wider relative z-30 drop-shadow-md">Suggest</span>
+                      </button>
+                    )}
                   </div>
-                </div>
-              )}
-            </React.Fragment>
+                )}
+
+                {!isPositionGuessingPhase && isActiveTeam && proposedIndex === index && phase !== 'REVEAL' && (
+                  <div className="shrink-0 w-24 h-32 bg-pink-600/20 border-2 border-pink-500 rounded-lg flex items-center justify-center animate-pulse shadow-[0_0_15px_rgba(236,72,153,0.3)]">
+                    <span className="text-pink-300 font-bold text-xs rotate-90 whitespace-nowrap uppercase tracking-widest">Locked</span>
+                  </div>
+                )}
+
+                {index < team.timeline.length && (
+                  <div className="shrink-0 w-24 h-32 bg-black rounded-lg overflow-hidden relative shadow-lg group hover:-translate-y-1 transition-transform">
+                    <img src={team.timeline[index].card.albumCover} className="w-full h-full object-cover opacity-50 group-hover:opacity-30 transition" />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center p-1.5 text-center">
+                      <span className="text-lg font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,1)]">{team.timeline[index].card.year}</span>
+                      <span className="text-[9px] font-medium text-gray-300 drop-shadow-[0_1px_1px_rgba(0,0,0,1)] line-clamp-2 mt-1 leading-tight">{team.timeline[index].card.title}</span>
+                    </div>
+                  </div>
+                )}
+              </React.Fragment>
             );
           })}
         </div>
