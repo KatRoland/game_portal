@@ -276,7 +276,7 @@ function ActiveTurnView({ hitsterData, isHost, user, HTFN }: any) {
               <p className="text-gray-300">
                 {isActiveTeam
                   ? (queueActive ? `Blocked! Another team is trying to steal the name!` : "Place the song chronologically in your timeline.")
-                  : "Watch closely! Hit 'Call' if you know the name to steal the token."}
+                  : (hitsterData.turnState?.nameGuessedCorrectly ? "Song name has been guessed! Watch the timeline placement." : "Watch closely! Hit 'Call' if you know the name to steal the token.")}
               </p>
             </>
           )}
@@ -293,6 +293,15 @@ function ActiveTurnView({ hitsterData, isHost, user, HTFN }: any) {
               <h2 className="text-4xl font-extrabold mb-2 text-green-400">Reveal!</h2>
               <p className="text-xl">The song was <span className="font-bold text-white">{hitsterData.currentSong?.artist} - {hitsterData.currentSong?.title}</span> ({hitsterData.currentSong?.year})</p>
             </>
+          )}
+
+          {phase !== 'REVEAL' && hitsterData.turnState?.nameGuessedCorrectly && hitsterData.currentSong && (
+            <div className="mt-3 bg-green-500/20 border border-green-500/40 px-4 py-2 rounded-xl flex items-center gap-2 shadow-[0_0_15px_rgba(34,197,94,0.2)]">
+              <span className="text-xs uppercase font-extrabold text-green-400 tracking-wider">Song:</span>
+              <span className="font-bold text-white text-base">
+                {hitsterData.currentSong.artist} - {hitsterData.currentSong.title}
+              </span>
+            </div>
           )}
         </div>
 
@@ -431,8 +440,13 @@ function TimelineView({ team, hitsterData, isActiveTeam, isMyTeam, HTFN, user }:
           {team.name}
           {isActiveTeam && <span className="text-[10px] bg-pink-500 text-white px-1.5 py-0.5 rounded-full uppercase tracking-widest shadow-[0_0_10px_rgba(236,72,153,0.5)]">Active</span>}
         </h3>
-        <div className="text-pink-300 font-bold bg-pink-900/40 px-3 py-0.5 text-sm rounded-full border border-pink-500/30">
-          Tokens: {team.tokens}
+        <div className="flex items-center gap-2">
+          <div className="text-purple-300 font-bold bg-purple-900/40 px-3 py-0.5 text-sm rounded-full border border-purple-500/30">
+            Cards: {team.timeline.length}{hitsterData.cardsToWin ? ` / ${hitsterData.cardsToWin}` : ''}
+          </div>
+          <div className="text-pink-300 font-bold bg-pink-900/40 px-3 py-0.5 text-sm rounded-full border border-pink-500/30">
+            Tokens: {team.tokens}
+          </div>
         </div>
       </div>
 
@@ -499,14 +513,29 @@ function TimelineView({ team, hitsterData, isActiveTeam, isMyTeam, HTFN, user }:
                 )}
 
                 {!isPositionGuessingPhase && isActiveTeam && proposedIndex === index && phase !== 'REVEAL' && (
-                  <div className="shrink-0 w-24 h-32 bg-pink-600/20 border-2 border-pink-500 rounded-lg flex items-center justify-center animate-pulse shadow-[0_0_15px_rgba(236,72,153,0.3)]">
-                    <span className="text-pink-300 font-bold text-xs rotate-90 whitespace-nowrap uppercase tracking-widest">Locked</span>
+                  <div className="shrink-0 w-24 h-32 bg-pink-600/20 border-2 border-pink-500 rounded-lg flex flex-col items-center justify-center p-2 text-center animate-pulse shadow-[0_0_15px_rgba(236,72,153,0.3)]">
+                    <span className="text-pink-300 font-bold text-[10px] uppercase tracking-widest mb-1">Locked</span>
+                    {hitsterData.turnState?.nameGuessedCorrectly && hitsterData.currentSong ? (
+                      <div className="flex flex-col items-center">
+                        <span className="text-[10px] text-white font-bold line-clamp-2 leading-tight">
+                          {hitsterData.currentSong.title}
+                        </span>
+                        <span className="text-[8px] text-gray-300 line-clamp-1 mt-0.5">
+                          {hitsterData.currentSong.artist}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-pink-400 text-xs font-black">?</span>
+                    )}
                   </div>
                 )}
 
                 {index < team.timeline.length && (
                   <div className="shrink-0 w-24 h-32 bg-black rounded-lg overflow-hidden relative shadow-lg group hover:-translate-y-1 transition-transform">
                     <img src={team.timeline[index].card.albumCover} className="w-full h-full object-cover opacity-50 group-hover:opacity-30 transition" />
+                    <span className="absolute top-1.5 left-1.5 z-10 bg-black/70 backdrop-blur-sm text-gray-300 text-[10px] font-bold px-1.5 py-0.5 rounded border border-white/10">
+                      #{index + 1}
+                    </span>
                     <div className="absolute inset-0 flex flex-col items-center justify-center p-1.5 text-center">
                       <span className="text-lg font-black text-white drop-shadow-[0_2px_2px_rgba(0,0,0,1)]">{team.timeline[index].card.year}</span>
                       <span className="text-[9px] font-medium text-gray-300 drop-shadow-[0_1px_1px_rgba(0,0,0,1)] line-clamp-2 mt-1 leading-tight">{team.timeline[index].card.title}</span>
