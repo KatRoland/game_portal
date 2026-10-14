@@ -142,7 +142,7 @@ export class HitsterHandler implements IGameModeHandler {
                         const teamId = hitsterData.teamOrder[teamIndex];
                         hitsterData.teams[teamId].playerIds.push(playerId);
                         hitsterData.players[playerId].teamId = teamId;
-                        
+
                         if (!hitsterData.teams[teamId].leaderId) {
                             hitsterData.teams[teamId].leaderId = playerId;
                         }
@@ -376,6 +376,48 @@ export class HitsterHandler implements IGameModeHandler {
                     setTimeout(() => {
                         if (hitsterData && hitsterData.turnState && hitsterData.turnState.phase === 'POSITION_CHALLENGE') {
                             hitsterData.turnState.phase = 'REVEAL';
+
+                            const actualYear = hitsterData.currentSong?.year;
+                            const proposedIndex = hitsterData.turnState.activeTeamProposedIndex;
+                            const activeTeam = hitsterData.teams[hitsterData.currentTurnTeamId!];
+
+                            if (actualYear && proposedIndex !== null && activeTeam) {
+                                const timeline = activeTeam.timeline;
+                                let isCorrect = true;
+                                let wasLower = false;
+                                let wasHigher = false;
+
+                                if (proposedIndex > 0 && timeline[proposedIndex - 1].card.year > actualYear) {
+                                    isCorrect = false;
+                                    wasLower = true;
+                                }
+                                if (proposedIndex < timeline.length && timeline[proposedIndex].card.year < actualYear) {
+                                    isCorrect = false;
+                                    wasHigher = true;
+                                }
+
+                                if (isCorrect) {
+                                    activeTeam.timeline.splice(proposedIndex, 0, { index: proposedIndex, card: hitsterData.currentSong! });
+                                } else {
+                                    for (const challenge of hitsterData.turnState.challenges) {
+                                        let challengeWon = false;
+                                        if (challenge.type === 'BAD_GUESS') challengeWon = true;
+                                        else if (challenge.type === 'LOWER' && wasLower) challengeWon = true;
+                                        else if (challenge.type === 'HIGHER' && wasHigher) challengeWon = true;
+
+                                        if (challengeWon) {
+                                            hitsterData.teams[challenge.teamId].timeline.push({ index: 0, card: hitsterData.currentSong! });
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                for (const tid in hitsterData.teams) {
+                                    hitsterData.teams[tid].timeline.sort((a, b) => a.card.year - b.card.year);
+                                    hitsterData.teams[tid].timeline.forEach((item, i) => item.index = i);
+                                }
+                            }
+
                             broadcast("hitster:state_updated");
                         }
                     }, 10000);
@@ -419,47 +461,6 @@ export class HitsterHandler implements IGameModeHandler {
                 case "hitster:next_turn": {
                     if (ctx.game.lobby.host.id !== ctx.userId || !hitsterData.turnState || hitsterData.turnState.phase !== 'REVEAL') return;
 
-                    const actualYear = hitsterData.currentSong?.year;
-                    const proposedIndex = hitsterData.turnState.activeTeamProposedIndex;
-                    const activeTeam = hitsterData.teams[hitsterData.currentTurnTeamId!];
-
-                    if (actualYear && proposedIndex !== null && activeTeam) {
-                        const timeline = activeTeam.timeline;
-                        let isCorrect = true;
-                        let wasLower = false;
-                        let wasHigher = false;
-
-                        if (proposedIndex > 0 && timeline[proposedIndex - 1].card.year > actualYear) {
-                            isCorrect = false;
-                            wasLower = true;
-                        }
-                        if (proposedIndex < timeline.length && timeline[proposedIndex].card.year < actualYear) {
-                            isCorrect = false;
-                            wasHigher = true;
-                        }
-
-                        if (isCorrect) {
-                            activeTeam.timeline.splice(proposedIndex, 0, { index: proposedIndex, card: hitsterData.currentSong! });
-                        } else {
-                            for (const challenge of hitsterData.turnState.challenges) {
-                                let challengeWon = false;
-                                if (challenge.type === 'BAD_GUESS') challengeWon = true;
-                                else if (challenge.type === 'LOWER' && wasLower) challengeWon = true;
-                                else if (challenge.type === 'HIGHER' && wasHigher) challengeWon = true;
-
-                                if (challengeWon) {
-                                    hitsterData.teams[challenge.teamId].timeline.push({ index: 0, card: hitsterData.currentSong! });
-                                    break;
-                                }
-                            }
-                        }
-
-                        for (const tid in hitsterData.teams) {
-                            hitsterData.teams[tid].timeline.sort((a, b) => a.card.year - b.card.year);
-                            hitsterData.teams[tid].timeline.forEach((item, i) => item.index = i);
-                        }
-                    }
-
                     const currentIndex = hitsterData.teamOrder.indexOf(hitsterData.currentTurnTeamId!);
                     hitsterData.currentTurnTeamId = hitsterData.teamOrder[(currentIndex + 1) % hitsterData.teamOrder.length];
 
@@ -472,6 +473,10 @@ export class HitsterHandler implements IGameModeHandler {
                         challenges: [],
                         challengeTimerEndsAt: null
                     };
+
+                    Object.values(hitsterData.teams).forEach(team => {
+                        team.proposedGuesses = [];
+                    });
 
                     const newSongs = await fetchRandomUnusedHitsterSongs(ctx.game.id, 1);
                     if (newSongs.length > 0) {
